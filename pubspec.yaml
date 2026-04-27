@@ -13,14 +13,19 @@ dependencies:
     path: ../dart_monty
   dart_monty_core:
     path: ../dart_monty_core
+  file: ^7.0.0
   flutter:
     sdk: flutter
+  http: ^1.2.0
+  path: ^1.9.0
+  path_provider: ^2.1.0
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
 
 dependency_overrides:
   dart_monty_core:
     path: ../dart_monty_core
+  isolate_manager: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -29,3 +34,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - packages/dart_monty_core/assets/dart_monty_core_bridge.js
+    - packages/dart_monty_core/assets/dart_monty_core_native.wasm
+    - packages/dart_monty_core/assets/dart_monty_core_worker.js

@@ -142,7 +142,7 @@ class _ErrorIndicator extends StatelessWidget {
         // paragraphs[0] is not necessarily line 0, but it has an index.
         // We need to see if any visible paragraph has the error index.
         final targetIndex = errorLine! - 1;
-        
+
         return Container(
           width: 20,
           alignment: Alignment.topCenter,

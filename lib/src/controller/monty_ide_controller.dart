@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dart_monty/dart_monty.dart';
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,9 @@ class MontyIdeController extends ChangeNotifier {
   MontyRuntime? _runtime;
   bool _isInitialized = false;
   bool _isExecuting = false;
+
+  /// Returns the list of registered extensions.
+  List<MontyExtension>? get extensions => _extensions;
 
   /// The line number of the last error, if any.
   int? lastErrorLine;
@@ -79,8 +83,42 @@ class MontyIdeController extends ChangeNotifier {
       }
 
       if (result.isError) {
+        // 1. Try to extract line number from the exception if available.
         lastErrorLine = result.error?.lineNumber;
-        _outputController.add('Error: ${result.error!.message}\n');
+
+        // 2. Fallback: Parse line number from message text like "at line 3"
+        if (lastErrorLine == null) {
+          final lineMatch =
+              RegExp(r'at line (\d+)').firstMatch(result.error!.message);
+          if (lineMatch != null) {
+            lastErrorLine = int.tryParse(lineMatch.group(1)!);
+          }
+        }
+
+        // 3. Fallback: Translate byte range (e.g. "at byte range 50..55")
+        // humans don't speak bytes!
+        if (lastErrorLine == null) {
+          final byteMatch =
+              RegExp(r'at byte range (\d+)').firstMatch(result.error!.message);
+          if (byteMatch != null) {
+            final startByte = int.tryParse(byteMatch.group(1)!);
+            if (startByte != null) {
+              lastErrorLine = _getLineFromByteOffset(normalizedCode, startByte);
+            }
+          }
+        }
+
+        var errorMessage = 'Error: ${result.error!.message}\n';
+
+        // Add helpful hint for print statements
+        if (result.error!.message
+                .contains('Simple statements must be separated') &&
+            code.contains('print ')) {
+          errorMessage +=
+              'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
+        }
+
+        _outputController.add(errorMessage);
       }
 
       return result;
@@ -91,6 +129,19 @@ class MontyIdeController extends ChangeNotifier {
       _isExecuting = false;
       notifyListeners();
     }
+  }
+
+  /// Translates a UTF-8 byte offset to a 1-based line number.
+  int _getLineFromByteOffset(String code, int offset) {
+    final bytes = utf8.encode(code);
+    var lineCount = 1;
+    for (var i = 0; i < offset && i < bytes.length; i++) {
+      if (bytes[i] == 10) {
+        // \n
+        lineCount++;
+      }
+    }
+    return lineCount;
   }
 
   /// Clears the interpreter state.
