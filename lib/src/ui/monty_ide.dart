@@ -6,7 +6,6 @@ import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
-import 'package:dart_monty_ide/src/ui/variable_inspector.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
@@ -45,7 +44,6 @@ class _MontyIdeState extends State<MontyIde> {
   bool _isSaving = false;
   bool _showExternals = false;
   bool _showAssistant = true;
-  bool _showVariables = false;
 
   final StreamController<String> _consoleStreamController =
       StreamController<String>.broadcast();
@@ -242,19 +240,6 @@ class _MontyIdeState extends State<MontyIde> {
                     ),
                     IconButton(
                       onPressed: () {
-                        setState(() => _showVariables = !_showVariables);
-                      },
-                      icon: Icon(
-                        _showVariables
-                            ? Icons.account_tree
-                            : Icons.account_tree_outlined,
-                        size: 20,
-                        color: _showVariables ? Colors.orange : null,
-                      ),
-                      tooltip: 'Toggle Variables',
-                    ),
-                    IconButton(
-                      onPressed: () {
                         setState(() => _showExternals = !_showExternals);
                       },
                       icon: Icon(
@@ -362,7 +347,6 @@ class _MontyIdeState extends State<MontyIde> {
               onCopyToEditor: _handleCopyToEditor,
             ),
           ),
-        if (_showVariables) VariableInspector(controller: _controller),
         if (_showExternals) ExternalsInspector(controller: _controller),
       ],
     );
