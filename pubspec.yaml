@@ -1,0 +1,31 @@
+name: dart_monty_ide
+description: "A mini-python IDE built with dart_monty."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  cupertino_icons: ^1.0.8
+  dart_monty:
+    path: ../dart_monty
+  dart_monty_core:
+    path: ../dart_monty_core
+  flutter:
+    sdk: flutter
+  re_editor: ^0.8.0
+  re_highlight: ^0.0.3
+
+dependency_overrides:
+  dart_monty_core:
+    path: ../dart_monty_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.2.0
+
+flutter:
+  uses-material-design: true

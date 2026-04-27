@@ -1,0 +1,102 @@
+dcm:
+  metrics:
+    cyclomatic-complexity:
+      threshold: 10
+    lines-of-code:
+      threshold: 50
+    number-of-parameters:
+      threshold: 6
+    maximum-nesting-level:
+      threshold: 4
+    number-of-methods:
+      threshold: 15
+    weight-of-a-class:
+      threshold: 15.0
+
+  exclude:
+    metrics:
+      - "**/*.g.dart"
+      - "build/**"
+      - "test/**"
+    rules:
+      - "**/*.g.dart"
+      - "test/**"
+
+  rules:
+    - avoid-throw-in-finally-block
+    - avoid-missing-completer-stack-trace
+    - avoid-uncaught-future-errors
+    - avoid-recursive-calls
+    - avoid-contradictory-expressions
+    - avoid-self-assignment
+    - avoid-unused-assignment
+    - avoid-unassigned-late-fields
+    - no-equal-arguments
+    - no-equal-conditions
+    - avoid-collapsible-if
+    - avoid-redundant-else
+    - avoid-unnecessary-conditionals
+    - avoid-shadowing
+    - avoid-only-rethrow
+    - avoid-identical-exception-handling-blocks
+    - prefer-early-return
+    - prefer-returning-condition
+    - avoid-throw-objects-without-tostring
+    - avoid-non-final-exception-class-fields
+    - prefer-correct-error-name
+    - avoid-unnecessary-local-variable
+    - avoid-unnecessary-reassignment
+    - avoid-mutating-parameters
+    - avoid-unused-local-variable
+    - avoid-nested-try-statements
+    - avoid-missing-interpolation
+    - prefer-correct-identifier-length
+    - avoid-unsafe-reduce
+    - avoid-map-keys-contains
+    - prefer-contains
+    - avoid-duplicate-map-keys
+    - avoid-duplicate-patterns
+    - avoid-equal-expressions
+    - avoid-constant-conditions
+    - no-equal-switch-case
+    - no-equal-switch-expression-cases
+    - no-equal-nested-conditions
+    - avoid-unused-parameters
+    - avoid-nested-conditional-expressions
+    - avoid-missing-enum-constant-in-map
+    - avoid-unnecessary-type-assertions
+    - avoid-unnecessary-type-casts
+    - avoid-unrelated-type-assertions
+    - avoid-redundant-async
+    - avoid-duplicate-exports
+    - avoid-collection-methods-with-unrelated-types
+    - avoid-passing-async-when-sync-expected
+    - prefer-immediate-return
+    - prefer-commenting-analyzer-ignores
+    - prefer-conditional-expressions
+    - prefer-trailing-comma
+    - prefer-moving-to-variable
+    - newline-before-return
+    - no-boolean-literal-compare
+    - no-empty-block
+    - no-equal-then-else
+    - prefer-first
+    - prefer-last
+    - binary-expression-operand-order
+    - double-literal-format
+    - prefer-switch-expression
+    - avoid-unnecessary-parentheses
+    - prefer-async-await
+    - avoid-adjacent-strings
+    - format-comment
+    - prefer-final-fields
+    - avoid-nested-futures
+    - avoid-nested-streams-and-futures
+    - avoid-type-casts
+    - avoid-inferrable-type-arguments
+    - avoid-unnecessary-futures
+    - prefer-correct-future-return-type
+    - avoid-future-tostring
+    - avoid-nullable-tostring
+    - dispose-class-fields
+    - avoid-global-state
