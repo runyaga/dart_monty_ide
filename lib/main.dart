@@ -61,7 +61,6 @@ When generating Python code for the Monty sandbox, follow these rules:
 3. The last expression is the return value.
 4. Use = for assignment, NOT :=. 
 5. Use flutter_set_prop(id, key, value) and flutter_set_color(id, color) to drive the GUI.
-6. Monty DOES NOT support classes or modules. Call host functions directly.
 ''';
 
   final files = await vfs.listFiles();
@@ -72,9 +71,7 @@ When generating Python code for the Monty sandbox, follow these rules:
   runApp(MyApp(vfs: vfs, controller: controller, registry: registry));
 }
 
-/// The main application widget.
 class MyApp extends StatelessWidget {
-  /// Creates a [MyApp].
   const MyApp({
     required this.vfs,
     required this.controller,
@@ -82,13 +79,8 @@ class MyApp extends StatelessWidget {
     super.key,
   });
 
-  /// The VFS instance.
   final MontyVfs vfs;
-
-  /// The Monty IDE controller.
   final MontyIdeController controller;
-
-  /// The widget registry for the bridge.
   final WidgetRegistry registry;
 
   @override
@@ -105,9 +97,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// The home page of the Monty IDE application.
 class MyHomePage extends StatelessWidget {
-  /// Creates a [MyHomePage].
   const MyHomePage({
     required this.vfs,
     required this.controller,
@@ -115,13 +105,8 @@ class MyHomePage extends StatelessWidget {
     super.key,
   });
 
-  /// The VFS instance.
   final MontyVfs vfs;
-
-  /// The Monty IDE controller.
   final MontyIdeController controller;
-
-  /// The widget registry for the bridge.
   final WidgetRegistry registry;
 
   @override
