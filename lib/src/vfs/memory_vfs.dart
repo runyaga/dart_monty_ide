@@ -1,6 +1,7 @@
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 /// A [MontyVfs] implementation that lives in memory.
@@ -22,7 +23,8 @@ class MemoryMontyVfs implements MontyVfs {
     }
 
     await for (final entity in root.list(recursive: true)) {
-      if (entity is File && (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
+      if (entity is File &&
+          (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
         files.add(p.relative(entity.path, from: _rootPath));
       }
     }

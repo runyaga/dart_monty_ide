@@ -1,6 +1,7 @@
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:file/file.dart';
 import 'package:file/local.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 /// A [MontyVfs] implementation that uses the local filesystem.
@@ -25,7 +26,8 @@ class LocalMontyVfs implements MontyVfs {
 
     final files = <String>[];
     await for (final entity in _root.list(recursive: true)) {
-      if (entity is File && (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
+      if (entity is File &&
+          (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
         files.add(p.relative(entity.path, from: rootPath));
       }
     }

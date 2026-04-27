@@ -45,9 +45,9 @@ class _VariableInspectorState extends State<VariableInspector> {
     if (mounted) setState(() => _isLoading = true);
 
     try {
-      // Introspection script
+      // Introspection script with unique variable names to avoid shadowing
       const script = '''
-[ (k, repr(v), type(v).__name__) for k, v in globals().items() if not k.startswith("__") ]
+[ (_ide_k, repr(_ide_v), type(_ide_v).__name__) for _ide_k, _ide_v in globals().items() if not _ide_k.startswith("__") ]
 ''';
       final result = await widget.controller.executeSilent(script);
       if (result != null && result.value is List) {

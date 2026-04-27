@@ -46,8 +46,15 @@ class _ChatPanelState extends State<ChatPanel> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  // Settings controllers
+  final TextEditingController _ollamaUrlController = 
+      TextEditingController(text: 'http://localhost:11434');
+  final TextEditingController _modelController = 
+      TextEditingController(text: 'gpt-oss:latest');
+  
   LlmProvider _provider = LlmProvider.ollama;
   bool _isStreaming = false;
+  bool _showSettings = false;
 
   late LlmService _ollamaService;
   late LlmService _openResponsesService;
@@ -57,6 +64,15 @@ class _ChatPanelState extends State<ChatPanel> {
     super.initState();
     _ollamaService = OllamaLlmService();
     _openResponsesService = OpenResponsesLlmService();
+  }
+
+  @override
+  void dispose() {
+    _inputController.dispose();
+    _scrollController.dispose();
+    _ollamaUrlController.dispose();
+    _modelController.dispose();
+    super.dispose();
   }
 
   LlmService get _currentService =>
@@ -86,8 +102,9 @@ class _ChatPanelState extends State<ChatPanel> {
     final config = LlmConfig(
       provider: _provider,
       baseUrl: _provider == LlmProvider.ollama
-          ? 'http://localhost:11434/api'
+          ? '${_ollamaUrlController.text.trim()}/api'
           : 'http://localhost:8080/v1',
+      model: _modelController.text.trim(),
     );
 
     try {
@@ -142,6 +159,14 @@ class _ChatPanelState extends State<ChatPanel> {
               const Text('ASSISTANT',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
               const Spacer(),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => setState(() => _showSettings = !_showSettings),
+                icon: Icon(Icons.settings, size: 14, color: _showSettings ? Colors.blue : null),
+                tooltip: 'LLM Settings',
+              ),
+              const SizedBox(width: 8),
               DropdownButton<LlmProvider>(
                 value: _provider,
                 isDense: true,
@@ -160,6 +185,34 @@ class _ChatPanelState extends State<ChatPanel> {
             ],
           ),
         ),
+        if (_showSettings)
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Theme.of(context).cardColor,
+            child: Column(
+              children: [
+                TextField(
+                  controller: _ollamaUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Ollama Base URL',
+                    labelStyle: TextStyle(fontSize: 10),
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 11),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _modelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Model Name',
+                    labelStyle: TextStyle(fontSize: 10),
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
