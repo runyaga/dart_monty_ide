@@ -25,7 +25,7 @@ class LocalMontyVfs implements MontyVfs {
 
     final files = <String>[];
     await for (final entity in _root.list(recursive: true)) {
-      if (entity is File && entity.path.endsWith('.py')) {
+      if (entity is File && (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
         files.add(p.relative(entity.path, from: rootPath));
       }
     }
@@ -40,11 +40,14 @@ class LocalMontyVfs implements MontyVfs {
 
   @override
   Future<void> writeFile(String path, String content) async {
-    final file = _fs.file(p.join(rootPath, path));
+    final fullPath = p.join(rootPath, path);
+    final file = _fs.file(fullPath);
+    debugPrint('LocalMontyVfs: Writing ${content.length} bytes to $fullPath');
     if (!await file.parent.exists()) {
       await file.parent.create(recursive: true);
     }
     await file.writeAsString(content);
+    debugPrint('LocalMontyVfs: Write complete.');
   }
 
   @override

@@ -36,8 +36,11 @@ class _MontyConsoleState extends State<MontyConsole> {
         // Scroll to bottom
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients && _lines.isNotEmpty) {
-            _scrollController
-                .jumpTo(_scrollController.position.maxScrollExtent);
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
           }
         });
       }
@@ -52,23 +55,39 @@ class _MontyConsoleState extends State<MontyConsole> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black,
-      padding: const EdgeInsets.all(8),
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: _lines.length,
-        itemBuilder: (context, index) {
-          return SelectableText(
-            _lines[index],
-            style: const TextStyle(
-              color: Colors.greenAccent,
-              fontFamily: 'monospace',
-              fontSize: 12,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          color: Colors.grey[800],
+          child: const Text(
+            'CONSOLE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
             ),
-          );
-        },
-      ),
+          ),
+        ),
+        Expanded(
+          child: Container(
+            color: Colors.black,
+            padding: const EdgeInsets.all(8),
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: SelectableText(
+                _lines.join(''),
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

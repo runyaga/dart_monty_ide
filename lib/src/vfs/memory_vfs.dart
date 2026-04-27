@@ -22,7 +22,7 @@ class MemoryMontyVfs implements MontyVfs {
     }
 
     await for (final entity in root.list(recursive: true)) {
-      if (entity is File && entity.path.endsWith('.py')) {
+      if (entity is File && (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
         files.add(p.relative(entity.path, from: _rootPath));
       }
     }
@@ -37,11 +37,14 @@ class MemoryMontyVfs implements MontyVfs {
 
   @override
   Future<void> writeFile(String path, String content) async {
-    final file = _fs.file(p.join(_rootPath, path));
+    final fullPath = p.join(_rootPath, path);
+    final file = _fs.file(fullPath);
+    debugPrint('MemoryMontyVfs: Writing ${content.length} bytes to $fullPath');
     if (!await file.parent.exists()) {
       await file.parent.create(recursive: true);
     }
     await file.writeAsString(content);
+    debugPrint('MemoryMontyVfs: Write complete.');
   }
 
   @override

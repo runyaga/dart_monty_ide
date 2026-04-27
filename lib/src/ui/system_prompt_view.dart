@@ -1,12 +1,17 @@
+import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// A widget that displays the Monty Sandbox system prompt rules.
-class SystemPromptView extends StatelessWidget {
+/// A widget that displays and allows editing the Monty Sandbox system prompt.
+class SystemPromptView extends StatefulWidget {
   /// Creates a [SystemPromptView].
-  const SystemPromptView({super.key});
+  const SystemPromptView({required this.vfs, super.key});
 
-  static const String _prompt = '''
+  /// The VFS to load/save the prompt.
+  final MontyVfs vfs;
+
+  /// Default static prompt for fallback.
+  static const String defaultPrompt = '''
 # Monty Sandbox — Prompt Rules for Code Generation
 
 When generating Python code for the Monty sandbox, follow these rules:
@@ -45,7 +50,47 @@ Monty is a restricted Python interpreter. It is NOT full CPython.
 ''';
 
   @override
+  State<SystemPromptView> createState() => _SystemPromptViewState();
+}
+
+class _SystemPromptViewState extends State<SystemPromptView> {
+  final TextEditingController _controller = TextEditingController();
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrompt();
+  }
+
+  Future<void> _loadPrompt() async {
+    try {
+      final content = await widget.vfs.readFile('system_prompt.txt');
+      _controller.text = content;
+    } catch (_) {
+      _controller.text = SystemPromptView.defaultPrompt;
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _savePrompt() async {
+    await widget.vfs.writeFile('system_prompt.txt', _controller.text);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('System prompt saved')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Column(
       children: [
         Container(
@@ -59,27 +104,36 @@ Monty is a restricted Python interpreter. It is NOT full CPython.
               ),
               const Spacer(),
               ElevatedButton.icon(
+                onPressed: _savePrompt,
+                icon: const Icon(Icons.save, size: 16),
+                label: const Text('Save', style: TextStyle(fontSize: 11)),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
                 onPressed: () {
-                  Clipboard.setData(const ClipboardData(text: _prompt));
+                  Clipboard.setData(ClipboardData(text: _controller.text));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Prompt copied to clipboard')),
                   );
                 },
                 icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy for LLM', style: TextStyle(fontSize: 11)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                ),
+                label: const Text('Copy', style: TextStyle(fontSize: 11)),
               ),
             ],
           ),
         ),
-        const Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(16),
-            child: SelectableText(
-              _prompt,
-              style: TextStyle(fontFamily: 'monospace', fontSize: 13),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _controller,
+              maxLines: null,
+              expands: true,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Enter system prompt rules...',
+              ),
             ),
           ),
         ),

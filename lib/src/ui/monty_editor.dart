@@ -12,6 +12,7 @@ class MontyEditor extends StatefulWidget {
     required this.controller,
     required this.onRun,
     this.ideController,
+    this.showRunButton = true,
     super.key,
   });
 
@@ -23,6 +24,9 @@ class MontyEditor extends StatefulWidget {
 
   /// Callback when the run button is pressed.
   final VoidCallback onRun;
+
+  /// Whether to show the floating run button.
+  final bool showRunButton;
 
   @override
   State<MontyEditor> createState() => _MontyEditorState();
@@ -66,7 +70,7 @@ class _MontyEditorState extends State<MontyEditor> {
           child: CodeEditor(
             controller: widget.controller,
             wordWrap: false,
-            autocompleteSymbols: true,
+            autocompleteSymbols: false,
             style: CodeEditorStyle(
               fontSize: 14,
               codeTheme: CodeHighlightTheme(
@@ -98,24 +102,25 @@ class _MontyEditorState extends State<MontyEditor> {
             },
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: Theme.of(context).cardColor,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ElevatedButton.icon(
-                onPressed: widget.onRun,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Run'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+        if (widget.showRunButton)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Theme.of(context).cardColor,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: widget.onRun,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Run'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }

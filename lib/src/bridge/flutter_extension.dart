@@ -2,6 +2,8 @@ import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 
 /// Extension that allows Python to interact with Flutter widgets.
+/// Monty does not support modules, so functions are exposed as
+/// flutter_set_prop(), etc.
 class MontyFlutterExtension extends MontyExtension {
   /// Creates a [MontyFlutterExtension].
   MontyFlutterExtension(this.registry);
@@ -16,23 +18,20 @@ class MontyFlutterExtension extends MontyExtension {
   List<HostFunction> get functions => [
         HostFunction(
           schema: const HostFunctionSchema(
-            name: 'set_prop',
+            name: 'flutter_set_prop',
             description: 'Sets a property on a widget with the given ID.',
             params: [
               HostParam(
                 name: 'id',
                 type: HostParamType.string,
-                description: 'The unique ID of the widget.',
               ),
               HostParam(
                 name: 'key',
                 type: HostParamType.string,
-                description: 'The property name (e.g., "color", "text").',
               ),
               HostParam(
                 name: 'value',
                 type: HostParamType.any,
-                description: 'The value to set.',
               ),
             ],
           ),
@@ -46,18 +45,16 @@ class MontyFlutterExtension extends MontyExtension {
         ),
         HostFunction(
           schema: const HostFunctionSchema(
-            name: 'get_prop',
+            name: 'flutter_get_prop',
             description: 'Gets a property from a widget with the given ID.',
             params: [
               HostParam(
                 name: 'id',
                 type: HostParamType.string,
-                description: 'The unique ID of the widget.',
               ),
               HostParam(
                 name: 'key',
                 type: HostParamType.string,
-                description: 'The property name.',
               ),
             ],
           ),
@@ -69,7 +66,7 @@ class MontyFlutterExtension extends MontyExtension {
         ),
         HostFunction(
           schema: const HostFunctionSchema(
-            name: 'set_color',
+            name: 'flutter_set_color',
             description: 'Convenience helper to set a widget color.',
             params: [
               HostParam(
@@ -79,7 +76,6 @@ class MontyFlutterExtension extends MontyExtension {
               HostParam(
                 name: 'color',
                 type: HostParamType.string,
-                description: 'Color name (red, blue, green, etc.)',
               ),
             ],
           ),

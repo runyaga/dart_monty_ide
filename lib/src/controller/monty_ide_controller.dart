@@ -43,12 +43,15 @@ class MontyIdeController extends ChangeNotifier {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
+    debugPrint('Initializing Monty Platform...');
     // Ensure WASM or FFI bindings are loaded.
     await DartMonty.ensureInitialized();
+    debugPrint('Monty Platform Initialized.');
 
     _runtime = MontyRuntime(
       extensions: _extensions,
     );
+    debugPrint('Monty Runtime Created.');
 
     _isInitialized = true;
     notifyListeners();
@@ -83,23 +86,19 @@ class MontyIdeController extends ChangeNotifier {
       }
 
       if (result.isError) {
-        // 1. Try to extract line number from the exception if available.
-        lastErrorLine = result.error?.lineNumber;
+        final montyExc = result.error;
+        lastErrorLine = montyExc?.lineNumber;
 
-        // 2. Fallback: Parse line number from message text like "at line 3"
-        if (lastErrorLine == null) {
-          final lineMatch =
-              RegExp(r'at line (\d+)').firstMatch(result.error!.message);
+        // Fallback: Parse line number
+        if (lastErrorLine == null && montyExc != null) {
+          final lineMatch = RegExp(r'at line (\d+)').firstMatch(montyExc.message);
           if (lineMatch != null) {
             lastErrorLine = int.tryParse(lineMatch.group(1)!);
           }
         }
 
-        // 3. Fallback: Translate byte range (e.g. "at byte range 50..55")
-        // humans don't speak bytes!
-        if (lastErrorLine == null) {
-          final byteMatch =
-              RegExp(r'at byte range (\d+)').firstMatch(result.error!.message);
+        if (lastErrorLine == null && montyExc != null) {
+          final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(montyExc.message);
           if (byteMatch != null) {
             final startByte = int.tryParse(byteMatch.group(1)!);
             if (startByte != null) {
@@ -108,22 +107,35 @@ class MontyIdeController extends ChangeNotifier {
           }
         }
 
-        var errorMessage = 'Error: ${result.error!.message}\n';
-
-        // Add helpful hint for print statements
-        if (result.error!.message
-                .contains('Simple statements must be separated') &&
-            code.contains('print ')) {
-          errorMessage +=
-              'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
+        var errorMessage = '';
+        if (montyExc != null) {
+          final type = montyExc.excType ?? 'PythonError';
+          errorMessage = '[$type] ${montyExc.message}\n';
+          if (montyExc.message.contains('Simple statements must be separated') && code.contains('print ')) {
+            errorMessage += 'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
+          }
+        } else {
+          errorMessage = 'Error: Unknown execution failure\n';
         }
-
         _outputController.add(errorMessage);
       }
 
       return result;
-    } on Exception catch (e) {
-      _outputController.add('Exception: $e\n');
+    } on MontySyntaxError catch (e) {
+      lastErrorLine = e.exception?.lineNumber;
+      _outputController.add('[SyntaxError] ${e.message}\n');
+      return null;
+    } on MontyScriptError catch (e) {
+      lastErrorLine = e.exception?.lineNumber;
+      _outputController.add('[${e.excType ?? "ScriptError"}] ${e.message}\n');
+      return null;
+    } on MontyResourceError catch (e) {
+      _outputController.add('[ResourceError] ${e.message}\n');
+      return null;
+    } catch (e, stack) {
+      debugPrint('Internal System Error: $e');
+      debugPrint('Stack Trace: $stack');
+      _outputController.add('[SystemException] $e\n');
       return null;
     } finally {
       _isExecuting = false;
@@ -142,6 +154,23 @@ class MontyIdeController extends ChangeNotifier {
       }
     }
     return lineCount;
+  }
+
+  /// Executes code without emitting to the output stream or changing error state.
+  ///
+  /// Used for introspection and background state updates.
+  Future<MontyResult?> executeSilent(String code) async {
+    if (!_isInitialized) return null;
+    debugPrint('Executing Silent Code: ${code.trim()}');
+    try {
+      final handle = _runtime!.execute(code);
+      final res = await handle.result;
+      debugPrint('Silent execution complete. Result: ${res.value}');
+      return res;
+    } catch (e) {
+      debugPrint('Silent execution error: $e');
+      return null;
+    }
   }
 
   /// Clears the interpreter state.

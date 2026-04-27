@@ -1,7 +1,7 @@
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:flutter/material.dart';
 
-/// A sidebar widget that displays exposed host functions.
+/// A sidebar widget that displays exposed host functions with their arguments.
 class ExternalsInspector extends StatelessWidget {
   /// Creates an [ExternalsInspector].
   const ExternalsInspector({
@@ -28,7 +28,7 @@ class ExternalsInspector extends StatelessWidget {
             padding: EdgeInsets.all(8),
             child: Text(
               'EXTERNALS',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
             ),
           ),
           if (extensions.isEmpty)
@@ -40,20 +40,24 @@ class ExternalsInspector extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final ext = extensions[index];
                   return ExpansionTile(
+                    initiallyExpanded: true,
                     title: Text(
-                      ext.namespace,
+                      ext.namespace.toUpperCase(),
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey,
                       ),
                     ),
                     children: ext.functions.map((fn) {
+                      final args = fn.schema.params.map((p) => p.name).join(', ');
                       return ListTile(
                         title: Text(
-                          fn.schema.name,
+                          '${fn.schema.name}($args)',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         subtitle: fn.schema.description != null

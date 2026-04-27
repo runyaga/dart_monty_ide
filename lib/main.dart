@@ -33,13 +33,41 @@ void main() async {
   );
 
   await vfs.writeFile(
-    'gui_demo.py',
+    'examples/01_basics.py',
+    'def welcome(name):\n'
+        '    return f"Greetings, {name}!"\n\n'
+        'print(welcome("Engineer"))\n',
+  );
+  await vfs.writeFile(
+    'examples/02_logic.py',
+    'numbers = [1, 2, 3, 4, 5]\n'
+        'print(f"Squares: {[n**2 for n in numbers]}")\n',
+  );
+  await vfs.writeFile(
+    'examples/03_gui.py',
     'print("🎨 Updating Flutter widgets...")\n'
-        'flutter.set_color("box_1", "teal")\n'
-        'flutter.set_prop("label_1", "text", "Updated from Monty Python!")\n'
-        'flutter.set_prop("box_1", "size", 120)\n'
+        'flutter_set_color("box_1", "teal")\n'
+        'flutter_set_prop("label_1", "text", "Updated from Monty Python!")\n'
         'print("Done.")\n',
   );
+
+  const defaultPrompt = '''# Monty Sandbox — Prompt Rules for Code Generation
+
+When generating Python code for the Monty sandbox, follow these rules:
+
+## Core Rules
+1. All host functions return JSON strings. Always json.loads() result if needed.
+2. import json at the top of every program.
+3. The last expression is the return value.
+4. Use = for assignment, NOT :=. 
+5. Use flutter_set_prop(id, key, value) and flutter_set_color(id, color) to drive the GUI.
+6. Monty DOES NOT support classes or modules. Call host functions directly.
+''';
+
+  final files = await vfs.listFiles();
+  if (!files.contains('system_prompt.txt')) {
+    await vfs.writeFile('system_prompt.txt', defaultPrompt);
+  }
 
   runApp(MyApp(vfs: vfs, controller: controller, registry: registry));
 }
