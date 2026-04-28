@@ -30,10 +30,11 @@ class MontyEditor extends StatefulWidget {
   final bool showRunButton;
 
   @override
-  State<MontyEditor> createState() => _MontyEditorState();
+  State<MontyEditor> createState() => MontyEditorState();
 }
 
-class _MontyEditorState extends State<MontyEditor> {
+/// State for [MontyEditor] to allow external control of search.
+class MontyEditorState extends State<MontyEditor> {
   late final CodeFindController _findController;
   bool _showFind = false;
 
@@ -68,7 +69,8 @@ class _MontyEditorState extends State<MontyEditor> {
     }
   }
 
-  void _toggleFind() {
+  /// Toggles the visibility of the search bar.
+  void toggleFind() {
     setState(() {
       _showFind = !_showFind;
       if (_showFind) {
@@ -89,7 +91,7 @@ class _MontyEditorState extends State<MontyEditor> {
       child: Actions(
         actions: <Type, Action<Intent>>{
           _FindIntent: CallbackAction<_FindIntent>(
-            onInvoke: (_) => _toggleFind(),
+            onInvoke: (_) => toggleFind(),
           ),
         },
         child: Column(
@@ -185,7 +187,11 @@ class _MontyFindWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(8),
-      color: Theme.of(context).cardColor,
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        border:
+            Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
       child: ValueListenableBuilder<CodeFindValue?>(
         valueListenable: controller,
         builder: (context, value, child) {

@@ -40,6 +40,7 @@ class _MontyIdeState extends State<MontyIde> {
   late final WidgetRegistry _registry;
   final CodeLineEditingController _editorController =
       CodeLineEditingController();
+  final GlobalKey<MontyEditorState> _editorKey = GlobalKey<MontyEditorState>();
 
   String? _currentFilePath;
   bool _isSaving = false;
@@ -230,11 +231,11 @@ class _MontyIdeState extends State<MontyIde> {
                         ),
                       )
                     else
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
                         child: Text(
-                          _viewingAssistantBuffer ? 'AI Code' : 'Scratchpad',
-                          style: const TextStyle(
+                          'Scratchpad',
+                          style: TextStyle(
                             fontStyle: FontStyle.italic,
                             fontSize: 12,
                             color: Colors.grey,
@@ -274,6 +275,11 @@ class _MontyIdeState extends State<MontyIde> {
                           : () => unawaited(_saveFile()),
                       icon: const Icon(Icons.save, size: 20),
                       tooltip: 'Save File',
+                    ),
+                    IconButton(
+                      onPressed: () => _editorKey.currentState?.toggleFind(),
+                      icon: const Icon(Icons.search, size: 20),
+                      tooltip: 'Find (CMD+F)',
                     ),
                     const VerticalDivider(width: 20, indent: 10, endIndent: 10),
                     TextButton.icon(
@@ -321,6 +327,7 @@ class _MontyIdeState extends State<MontyIde> {
                         codeStream: _assistantBufferController.stream,
                       )
                     : MontyEditor(
+                        key: _editorKey,
                         controller: _editorController,
                         ideController: _controller,
                         onRun: _handleRun,
@@ -485,7 +492,7 @@ class _TabButton extends StatelessWidget {
 }
 
 class _HorizontalResizer extends StatelessWidget {
-  const _HorizontalResizer({required this.onDrag});
+  const _HorizontalResizer({required this.onDrag, super.key});
   final ValueChanged<double> onDrag;
 
   @override
