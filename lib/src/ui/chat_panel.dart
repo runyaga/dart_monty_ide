@@ -15,14 +15,33 @@ class ChatMessage {
   /// Creates a [ChatMessage].
   ChatMessage({
     required this.role,
-    required this.content,
-  });
+    String content = '',
+  }) : _content = content;
 
   /// Role of the message sender.
   final String role;
 
-  /// Content of the message.
-  String content;
+  String _content;
+
+  /// Current content of the message.
+  String get content => _content;
+
+  final StreamController<String> _contentController =
+      StreamController<String>.broadcast();
+
+  /// Stream of content updates.
+  Stream<String> get contentStream => _contentController.stream;
+
+  /// Appends text to the message and notifies listeners.
+  void append(String text) {
+    _content += text;
+    _contentController.add(_content);
+  }
+
+  /// Closes the content stream.
+  void dispose() {
+    _contentController.close();
+  }
 }
 
 /// A panel for interacting with an LLM with tool support.
@@ -92,6 +111,9 @@ class _ChatPanelState extends State<ChatPanel> {
     _modelController.dispose();
     _ollamaService.dispose();
     _openResponsesService.dispose();
+    for (final m in _messages) {
+      m.dispose();
+    }
     super.dispose();
   }
 
@@ -172,9 +194,10 @@ class _ChatPanelState extends State<ChatPanel> {
       model: _modelController.text.trim(),
     );
 
+    final assistantMsg = ChatMessage(role: 'assistant');
     if (mounted) {
       setState(() {
-        _messages.add(ChatMessage(role: 'assistant', content: ''));
+        _messages.add(assistantMsg);
       });
     }
 
@@ -189,14 +212,12 @@ class _ChatPanelState extends State<ChatPanel> {
 
       await for (final chunk in stream) {
         if (!mounted) break;
-        setState(() {
-          if (chunk.text != null) {
-            _messages.last.content += chunk.text!;
-          }
-          if (chunk.toolCalls != null) {
-            toolCalls.addAll(chunk.toolCalls!);
-          }
-        });
+        if (chunk.text != null) {
+          assistantMsg.append(chunk.text!);
+        }
+        if (chunk.toolCalls != null) {
+          toolCalls.addAll(chunk.toolCalls!);
+        }
         _scrollToBottom();
       }
 
@@ -208,9 +229,7 @@ class _ChatPanelState extends State<ChatPanel> {
       }
     } on Exception catch (e) {
       if (mounted) {
-        setState(() {
-          _messages.last.content += '\n\n**Error:** $e';
-        });
+        assistantMsg.append('\n\n**Error:** $e');
       }
     } finally {
       if (mounted) {
@@ -220,14 +239,13 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   Future<void> _handleToolCall(LlmToolCall call) async {
+    final toolMsg = ChatMessage(
+      role: 'assistant',
+      content: '🛠️ Calling tool: ${call.name}...',
+    );
     if (mounted) {
       setState(() {
-        _messages.add(
-          ChatMessage(
-            role: 'assistant',
-            content: '🛠️ Calling tool: ${call.name}...',
-          ),
-        );
+        _messages.add(toolMsg);
       });
     }
     _scrollToBottom();
@@ -269,21 +287,21 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        unawaited(
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          ),
-        );
-      }
-    });
+    if (!_scrollController.hasClients) return;
+    unawaited(
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      ),
+    );
   }
 
   void _clearChat() {
     setState(() {
+      for (final m in _messages) {
+        m.dispose();
+      }
       _messages.clear();
     });
   }
@@ -385,30 +403,10 @@ class _ChatPanelState extends State<ChatPanel> {
               final msg = _messages[index];
               if (msg.role == 'tool') return const SizedBox.shrink();
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      msg.role.toUpperCase(),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
-                        color: msg.role == 'user' ? Colors.blue : Colors.purple,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    MarkdownBody(
-                      data: msg.content,
-                      selectable: true,
-                      builders: {
-                        'code':
-                            _CodeBlockBuilder(onCopy: widget.onCopyToEditor),
-                      },
-                    ),
-                  ],
-                ),
+              return _ChatMessageWidget(
+                key: ValueKey(msg),
+                message: msg,
+                onCopyToEditor: widget.onCopyToEditor,
               );
             },
           ),
@@ -430,11 +428,17 @@ class _ChatPanelState extends State<ChatPanel> {
                     border: InputBorder.none,
                     isDense: true,
                   ),
-                  onSubmitted: (value) => unawaited(_sendMessage()),
+                  onSubmitted: (_) {
+                    unawaited(_sendMessage());
+                  },
                 ),
               ),
               IconButton(
-                onPressed: _isStreaming ? null : _sendMessage,
+                onPressed: _isStreaming
+                    ? null
+                    : () {
+                        unawaited(_sendMessage());
+                      },
                 icon: _isStreaming
                     ? const SizedBox(
                         width: 20,
@@ -447,6 +451,62 @@ class _ChatPanelState extends State<ChatPanel> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChatMessageWidget extends StatefulWidget {
+  const _ChatMessageWidget({
+    required this.message,
+    required this.onCopyToEditor,
+    super.key,
+  });
+
+  final ChatMessage message;
+  final ValueChanged<String> onCopyToEditor;
+
+  @override
+  State<_ChatMessageWidget> createState() => _ChatMessageWidgetState();
+}
+
+class _ChatMessageWidgetState extends State<_ChatMessageWidget>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.message.role.toUpperCase(),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              color:
+                  widget.message.role == 'user' ? Colors.blue : Colors.purple,
+            ),
+          ),
+          const SizedBox(height: 4),
+          StreamBuilder<String>(
+            stream: widget.message.contentStream,
+            initialData: widget.message.content,
+            builder: (context, snapshot) {
+              return MarkdownBody(
+                data: snapshot.data ?? '',
+                selectable: true,
+                builders: {
+                  'code': _CodeBlockBuilder(onCopy: widget.onCopyToEditor),
+                },
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
