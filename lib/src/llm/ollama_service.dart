@@ -81,21 +81,23 @@ class OllamaLlmService implements LlmService {
           }
         }
 
-        // HEURISTIC REPAIR: If the model output a code block but didn't trigger a tool call
+        // HEURISTIC REPAIR: If the model output a code block but didn't trigger a tool call.
+        // We now trigger type_check FIRST as mandated by the system prompt.
         if (!toolCalled) {
-          final codeBlockRegex = RegExp(r'```python\n([\s\S]*?)```');
+          final codeBlockRegex = RegExp(r'```(?:python)?\n([\s\S]*?)```');
           final match = codeBlockRegex.firstMatch(fullContent);
 
           if (match != null) {
             final code = match.group(1)?.trim();
             if (code != null && code.isNotEmpty) {
-              _log('Heuristic: Repairing missing tool call for python block');
+              _log(
+                  'Heuristic: Detected code block, triggering mandatory type_check');
               controller.add(
                 LlmResponseChunk(
                   toolCalls: [
                     LlmToolCall(
                       id: 'repaired',
-                      name: 'run_python',
+                      name: 'type_check',
                       arguments: {'code': code},
                     ),
                   ],
