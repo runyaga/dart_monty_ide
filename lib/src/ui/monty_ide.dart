@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:dart_monty_ide/assistant.dart';
+import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
@@ -44,6 +46,7 @@ class _MontyIdeState extends State<MontyIde> {
   bool _isSaving = false;
   bool _showExternals = false;
   bool _viewingAssistantBuffer = false;
+  bool _isAssistantProcessing = false;
 
   double _externalsWidth = 250;
 
@@ -108,7 +111,7 @@ class _MontyIdeState extends State<MontyIde> {
       setState(() {
         _currentFilePath = path;
         _editorController.text = content;
-        _viewingAssistantBuffer = false; // Switch to editor when file loaded
+        _viewingAssistantBuffer = false;
       });
     } on Exception catch (e) {
       if (mounted) {
@@ -159,6 +162,32 @@ class _MontyIdeState extends State<MontyIde> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _handleAssistantPrompt(String prompt) async {
+    if (_isAssistantProcessing) return;
+    setState(() => _isAssistantProcessing = true);
+
+    final handler = IdeToolHandler(vfs: widget.vfs, ideController: _controller);
+    final assistant = AssistantController(
+      toolHandler: handler,
+      llmService: OllamaLlmService(),
+      config: LlmConfig(
+        provider: LlmProvider.ollama,
+        baseUrl: 'http://localhost:11434',
+        model: 'gpt-oss:20b',
+      ),
+      systemPrompt: defaultAssistantPrompt,
+    );
+
+    try {
+      final response = await assistant.processPrompt(prompt);
+      _assistantBufferController.add(response);
+    } on Exception catch (e) {
+      _assistantBufferController.add('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isAssistantProcessing = false);
     }
   }
 
@@ -312,6 +341,8 @@ class _MontyIdeState extends State<MontyIde> {
                 child: _viewingAssistantBuffer
                     ? MontyAssistantBuffer(
                         codeStream: _assistantBufferController.stream,
+                        isProcessing: _isAssistantProcessing,
+                        onPrompt: _handleAssistantPrompt,
                       )
                     : MontyEditor(
                         key: _editorKey,
