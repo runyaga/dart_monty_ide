@@ -16,7 +16,7 @@ dependencies:
   file: ^7.0.0
   flutter:
     sdk: flutter
-  flutter_markdown: ^0.7.3+1
+  flutter_markdown_plus: ^1.0.0
   http: ^1.2.0
   markdown: ^7.3.1
   ollama_dart: ^2.1.0

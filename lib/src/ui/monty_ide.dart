@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
+import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
 import 'package:dart_monty_ide/src/ui/chat_panel.dart';
 import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
@@ -44,6 +45,7 @@ class _MontyIdeState extends State<MontyIde> {
   bool _isSaving = false;
   bool _showExternals = false;
   bool _showAssistant = true;
+  bool _viewingAssistantBuffer = false;
 
   double _assistantWidth = 350;
   double _externalsWidth = 250;
@@ -51,6 +53,8 @@ class _MontyIdeState extends State<MontyIde> {
   int _fileExplorerVersion = 0;
 
   final StreamController<String> _consoleStreamController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _assistantBufferController =
       StreamController<String>.broadcast();
 
   @override
@@ -107,6 +111,7 @@ class _MontyIdeState extends State<MontyIde> {
       setState(() {
         _currentFilePath = path;
         _editorController.text = content;
+        _viewingAssistantBuffer = false; // Switch to editor when file loaded
       });
     } on Exception catch (e) {
       if (mounted) {
@@ -127,6 +132,7 @@ class _MontyIdeState extends State<MontyIde> {
     }
     _editorController.dispose();
     _consoleStreamController.close();
+    _assistantBufferController.close();
     super.dispose();
   }
 
@@ -138,6 +144,7 @@ class _MontyIdeState extends State<MontyIde> {
   void _handleCopyToEditor(String code) {
     setState(() {
       _editorController.text = code;
+      _viewingAssistantBuffer = false;
     });
   }
 
@@ -174,6 +181,13 @@ class _MontyIdeState extends State<MontyIde> {
     });
   }
 
+  void _handleAssistantCode(String code) {
+    setState(() {
+      _viewingAssistantBuffer = true;
+    });
+    _assistantBufferController.add(code);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -191,16 +205,17 @@ class _MontyIdeState extends State<MontyIde> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
-                    const Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                      child: Text(
-                        'EDITOR',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    _TabButton(
+                      label: 'EDITOR',
+                      isActive: !_viewingAssistantBuffer,
+                      onTap: () =>
+                          setState(() => _viewingAssistantBuffer = false),
+                    ),
+                    _TabButton(
+                      label: 'LLM',
+                      isActive: _viewingAssistantBuffer,
+                      onTap: () =>
+                          setState(() => _viewingAssistantBuffer = true),
                     ),
                     const VerticalDivider(width: 20),
                     if (_currentFilePath != null)
@@ -215,11 +230,11 @@ class _MontyIdeState extends State<MontyIde> {
                         ),
                       )
                     else
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
                         child: Text(
-                          'Scratchpad',
-                          style: TextStyle(
+                          _viewingAssistantBuffer ? 'AI Code' : 'Scratchpad',
+                          style: const TextStyle(
                             fontStyle: FontStyle.italic,
                             fontSize: 12,
                             color: Colors.grey,
@@ -301,25 +316,30 @@ class _MontyIdeState extends State<MontyIde> {
               ),
               Expanded(
                 flex: 3,
-                child: MontyEditor(
-                  controller: _editorController,
-                  ideController: _controller,
-                  onRun: _handleRun,
-                  showRunButton: false,
-                ),
+                child: _viewingAssistantBuffer
+                    ? MontyAssistantBuffer(
+                        codeStream: _assistantBufferController.stream,
+                      )
+                    : MontyEditor(
+                        controller: _editorController,
+                        ideController: _controller,
+                        onRun: _handleRun,
+                        showRunButton: false,
+                      ),
               ),
               const Divider(height: 1),
               Expanded(
                 child: Row(
                   children: [
                     Expanded(
+                      flex: 2,
                       child: MontyConsole(
                         outputStream: _consoleStreamController.stream,
                       ),
                     ),
                     const VerticalDivider(width: 1),
                     Container(
-                      width: 200,
+                      width: 250,
                       color: Colors.grey[50],
                       padding: const EdgeInsets.all(8),
                       child: Column(
@@ -400,6 +420,7 @@ class _MontyIdeState extends State<MontyIde> {
               onCopyToEditor: _handleCopyToEditor,
               onClose: () => setState(() => _showAssistant = false),
               onFileWritten: _handleFileWritten,
+              onAssistantCode: _handleAssistantCode,
             ),
           ),
         ],
@@ -421,6 +442,44 @@ class _MontyIdeState extends State<MontyIde> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? Colors.blue : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: isActive ? Colors.blue : Colors.grey,
+          ),
+        ),
+      ),
     );
   }
 }

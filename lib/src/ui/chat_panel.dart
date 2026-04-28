@@ -7,7 +7,7 @@ import 'package:dart_monty_ide/src/llm/open_responses_service.dart';
 import 'package:dart_monty_ide/src/ui/system_prompt_view.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 
 /// A message in the chat.
@@ -34,6 +34,7 @@ class ChatPanel extends StatefulWidget {
     required this.onCopyToEditor,
     required this.onClose,
     this.onFileWritten,
+    this.onAssistantCode,
     super.key,
   });
 
@@ -51,6 +52,9 @@ class ChatPanel extends StatefulWidget {
 
   /// Callback when a file is written by a tool.
   final VoidCallback? onFileWritten;
+
+  /// Callback when the assistant generates or runs code.
+  final ValueChanged<String>? onAssistantCode;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -232,6 +236,7 @@ class _ChatPanelState extends State<ChatPanel> {
     try {
       if (call.name == 'run_python') {
         final code = (call.arguments['code'] as String?) ?? '';
+        widget.onAssistantCode?.call(code);
         final res = await widget.controller.execute(code);
         result = {
           'output': res?.printOutput,
@@ -241,6 +246,7 @@ class _ChatPanelState extends State<ChatPanel> {
       } else if (call.name == 'write_file') {
         final path = (call.arguments['path'] as String?) ?? 'untitled.py';
         final content = (call.arguments['content'] as String?) ?? '';
+        widget.onAssistantCode?.call(content);
         await widget.vfs.writeFile(path, content);
         widget.onFileWritten?.call();
         result = {'status': 'success', 'path': path};
@@ -424,17 +430,11 @@ class _ChatPanelState extends State<ChatPanel> {
                     border: InputBorder.none,
                     isDense: true,
                   ),
-                  onSubmitted: (value) {
-                    unawaited(_sendMessage());
-                  },
+                  onSubmitted: (value) => unawaited(_sendMessage()),
                 ),
               ),
               IconButton(
-                onPressed: _isStreaming
-                    ? null
-                    : () {
-                        unawaited(_sendMessage());
-                      },
+                onPressed: _isStreaming ? null : _sendMessage,
                 icon: _isStreaming
                     ? const SizedBox(
                         width: 20,
