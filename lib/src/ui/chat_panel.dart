@@ -19,6 +19,7 @@ class ChatMessage {
     required this.role,
     String content = '',
     this.isUiOnly = false,
+    this.toolCallId,
     this.toolCalls,
   }) : _content = content {
     // Throttle the UI updates to every 100ms for smoother markdown parsing.
@@ -31,6 +32,9 @@ class ChatMessage {
 
   /// Whether this message is for UI display only and not sent to the LLM.
   final bool isUiOnly;
+
+  /// Optional ID if this is a tool result.
+  final String? toolCallId;
 
   /// Optional list of tool calls if this is an assistant message.
   final List<LlmToolCall>? toolCalls;
@@ -243,9 +247,14 @@ class _ChatPanelState extends State<ChatPanel> {
             'role': m.role,
             'content': m.content,
           };
+          if (m.toolCallId != null) {
+            map['tool_call_id'] = m.toolCallId;
+          }
           if (m.toolCalls != null) {
             map['tool_calls'] = m.toolCalls!
                 .map((tc) => {
+                      'id': tc.id,
+                      'type': 'function',
                       'function': {
                         'name': tc.name,
                         'arguments': tc.arguments,
@@ -259,7 +268,7 @@ class _ChatPanelState extends State<ChatPanel> {
     ];
 
     await _logDebug(
-        'FULL HISTORY PAYLOAD:\n${const JsonEncoder.withIndent('  ').convert(history)}');
+        'SENDING HISTORY TO LLM (${history.length} messages):\n${const JsonEncoder.withIndent('  ').convert(history)}');
 
     final config = LlmConfig(
       provider: _provider,
@@ -300,8 +309,7 @@ class _ChatPanelState extends State<ChatPanel> {
       if (toolCalls.isNotEmpty) {
         await _logDebug('Received ${toolCalls.length} tool calls');
 
-        // Create a hidden assistant message that actually holds the tool call data for history.
-        // CRITICAL FIX: isUiOnly MUST BE FALSE for these to stay in history!
+        // Replace the partial streaming message with a structured tool call message
         final assistantToolCallMsg = ChatMessage(
           role: 'assistant',
           content: assistantMsgContent.content,
@@ -309,7 +317,6 @@ class _ChatPanelState extends State<ChatPanel> {
           isUiOnly: false,
         );
 
-        // Replace the "empty" or partial assistant message in history logic
         if (_messages.isNotEmpty) {
           _messages.removeLast();
         }
@@ -317,7 +324,6 @@ class _ChatPanelState extends State<ChatPanel> {
 
         _toolCallCount++;
         for (final call in toolCalls) {
-          // DUPLICATE DETECTION: Check if we are repeating the exact same call
           final callSig = '${call.name}:${jsonEncode(call.arguments)}';
           if (_toolCallHistory.contains(callSig)) {
             await _logDebug('Loop detected: LLM repeated call $callSig');
@@ -340,7 +346,6 @@ class _ChatPanelState extends State<ChatPanel> {
       }
     } finally {
       if (mounted && toolCalls.isEmpty) {
-        // Final response received
         setState(() => _isStreaming = false);
       }
     }
@@ -348,18 +353,14 @@ class _ChatPanelState extends State<ChatPanel> {
 
   Future<void> _logDebug(String text) async {
     final entry = '${DateTime.now().toIso8601String()}: $text';
-
-    // Update UI Log
     if (mounted) {
       setState(() {
         _lastDebugLog = '$entry\n$_lastDebugLog';
-        if (_lastDebugLog.length > 20000) {
-          _lastDebugLog = _lastDebugLog.substring(0, 20000);
+        if (_lastDebugLog.length > 30000) {
+          _lastDebugLog = _lastDebugLog.substring(0, 30000);
         }
       });
     }
-
-    // Write to Disk Log for CLI access
     try {
       String current = '';
       try {
@@ -423,7 +424,7 @@ class _ChatPanelState extends State<ChatPanel> {
       result = {'error': e.toString()};
     }
 
-    await _logDebug('Tool result for ${call.name}: ${jsonEncode(result)}');
+    await _logDebug('TOOL RESULT [${call.id}]: ${jsonEncode(result)}');
 
     if (mounted) {
       setState(() {
@@ -431,7 +432,8 @@ class _ChatPanelState extends State<ChatPanel> {
           ChatMessage(
             role: 'tool',
             content: jsonEncode(result),
-            isUiOnly: false, // MANDATORY FOR HISTORY
+            toolCallId: call.id,
+            isUiOnly: false,
           ),
         );
       });
@@ -442,13 +444,9 @@ class _ChatPanelState extends State<ChatPanel> {
   DateTime _lastScroll = DateTime.now();
   void _scrollToBottom({bool force = false}) {
     if (!_scrollController.hasClients) return;
-
-    // Throttle scroll events to 100ms
     final now = DateTime.now();
     if (!force && now.difference(_lastScroll).inMilliseconds < 100) return;
     _lastScroll = now;
-
-    // Use jumpTo for streaming performance, animateTo only for discrete events
     if (force) {
       unawaited(
         _scrollController.animateTo(
@@ -573,13 +571,12 @@ class _ChatPanelState extends State<ChatPanel> {
         ),
         if (_showDebug)
           Container(
-            height: 250, // Increased size for history inspection
+            height: 350,
             width: double.infinity,
             color: Colors.black,
             padding: const EdgeInsets.all(8),
             child: SingleChildScrollView(
               child: SelectableText(
-                // Made selectable
                 _lastDebugLog,
                 style: const TextStyle(
                   color: Colors.greenAccent,
@@ -594,7 +591,7 @@ class _ChatPanelState extends State<ChatPanel> {
             controller: _scrollController,
             padding: const EdgeInsets.all(16),
             itemCount: _messages.length,
-            cacheExtent: 1000, // Pre-render to reduce layout lag
+            cacheExtent: 1000,
             itemBuilder: (context, index) {
               final msg = _messages[index];
               if (msg.role == 'tool') return const SizedBox.shrink();
@@ -695,7 +692,6 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget>
             stream: widget.message.contentStream,
             initialData: widget.message.content,
             builder: (context, snapshot) {
-              // Disable selection during streaming to speed up MarkdownBody
               return MarkdownBody(
                 data: snapshot.data ?? '',
                 selectable: !widget.isStreaming,
@@ -712,10 +708,7 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget>
 }
 
 class _CodeBlockBuilder extends MarkdownElementBuilder {
-  /// Creates a [_CodeBlockBuilder].
   _CodeBlockBuilder({required this.onCopy});
-
-  /// Callback when code should be copied to the editor.
   final ValueChanged<String> onCopy;
 
   @override
