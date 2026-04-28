@@ -74,6 +74,7 @@ class MontyEditorState extends State<MontyEditor> {
     setState(() {
       _showFind = !_showFind;
       if (_showFind) {
+        _findController.findMode();
         _findController.focusOnFindInput();
       } else {
         _findController.close();
@@ -96,16 +97,6 @@ class MontyEditorState extends State<MontyEditor> {
         },
         child: Column(
           children: [
-            if (_showFind)
-              _MontyFindWidget(
-                controller: _findController,
-                onClose: () {
-                  setState(() {
-                    _showFind = false;
-                    _findController.close();
-                  });
-                },
-              ),
             Expanded(
               child: CodeEditor(
                 controller: widget.controller,
@@ -121,6 +112,18 @@ class MontyEditorState extends State<MontyEditor> {
                     theme: atomOneDarkTheme,
                   ),
                 ),
+                findBuilder: (context, controller, readOnly) {
+                  if (!_showFind) return const _EmptyPreferredSize();
+                  return _MontyFindWidget(
+                    controller: controller,
+                    onClose: () {
+                      setState(() {
+                        _showFind = false;
+                        controller.close();
+                      });
+                    },
+                  );
+                },
                 indicatorBuilder:
                     (context, editingController, chunkController, notifier) {
                   return Row(
@@ -174,7 +177,18 @@ class _FindIntent extends Intent {
   const _FindIntent();
 }
 
-class _MontyFindWidget extends StatelessWidget {
+class _EmptyPreferredSize extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _EmptyPreferredSize();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+
+  @override
+  Size get preferredSize => Size.zero;
+}
+
+class _MontyFindWidget extends StatelessWidget implements PreferredSizeWidget {
   const _MontyFindWidget({
     required this.controller,
     required this.onClose,
@@ -184,57 +198,63 @@ class _MontyFindWidget extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        border:
-            Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
-      ),
-      child: ValueListenableBuilder<CodeFindValue?>(
-        valueListenable: controller,
-        builder: (context, value, child) {
-          final result = value?.result;
-          final matches = result?.matches ?? [];
-          final current = (result?.index ?? -1) + 1;
-          final total = matches.length;
+  Size get preferredSize => const Size.fromHeight(50);
 
-          return Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller.findInputController,
-                  decoration: const InputDecoration(
-                    hintText: 'Find',
-                    isDense: true,
-                    contentPadding: EdgeInsets.all(8),
-                    border: OutlineInputBorder(),
+  @override
+  Widget build(BuildContext context) {
+    return CodeEditorTapRegion(
+      child: Container(
+        height: preferredSize.height,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          border:
+              Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+        ),
+        child: ValueListenableBuilder<CodeFindValue?>(
+          valueListenable: controller,
+          builder: (context, value, child) {
+            final result = value?.result;
+            final matches = result?.matches ?? [];
+            final current = (result?.index ?? -1) + 1;
+            final total = matches.length;
+
+            return Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller.findInputController,
+                    focusNode: controller.findInputFocusNode,
+                    decoration: const InputDecoration(
+                      hintText: 'Find',
+                      isDense: true,
+                      contentPadding: EdgeInsets.all(8),
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => controller.nextMatch(),
                   ),
-                  autofocus: true,
-                  onSubmitted: (_) => controller.nextMatch(),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '$current / $total',
-                style: const TextStyle(fontSize: 12),
-              ),
-              IconButton(
-                icon: const Icon(Icons.arrow_upward, size: 18),
-                onPressed: total > 0 ? controller.previousMatch : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.arrow_downward, size: 18),
-                onPressed: total > 0 ? controller.nextMatch : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: onClose,
-              ),
-            ],
-          );
-        },
+                const SizedBox(width: 8),
+                Text(
+                  '$current / $total',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_upward, size: 18),
+                  onPressed: total > 0 ? controller.previousMatch : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_downward, size: 18),
+                  onPressed: total > 0 ? controller.nextMatch : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: onClose,
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
