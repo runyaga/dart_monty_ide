@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:ollama_dart/ollama_dart.dart';
 
@@ -48,13 +49,13 @@ class OllamaLlmService implements LlmService {
       messages: ollamaMessages,
       tools: ollamaTools,
       options: const ModelOptions(
-        temperature: 0.1, // Less creative, more predictable
-        numPredict: 2048, // Allow for longer code generation
+        temperature: 0.1,
+        numPredict: 2048,
         stop: StopSequence.list(['<|end_of_text|>', 'USER:', 'ASSISTANT:']),
       ),
     );
 
-    _log('Requesting ${config.model} (T=0.1)');
+    _log('REQUEST MESSAGES: ${jsonEncode(messages)}');
 
     unawaited(() async {
       var fullContent = '';
@@ -66,14 +67,20 @@ class OllamaLlmService implements LlmService {
           final delta = chunk.message?.content;
           final toolCalls = chunk.message?.toolCalls?.map((tc) {
             toolCalled = true;
+            // Generate a random ID if missing, some libraries require it to match response
+            final id = 'call_${DateTime.now().millisecondsSinceEpoch}';
+            _log(
+                'LLM requested tool: ${tc.function?.name} with args: ${tc.function?.arguments}');
             return LlmToolCall(
-              id: '',
+              id: id,
               name: tc.function?.name ?? '',
               arguments: tc.function?.arguments ?? {},
             );
           }).toList();
 
-          if (delta != null) fullContent += delta;
+          if (delta != null) {
+            fullContent += delta;
+          }
 
           if ((delta != null && delta.isNotEmpty) ||
               (toolCalls != null && toolCalls.isNotEmpty)) {
@@ -81,8 +88,7 @@ class OllamaLlmService implements LlmService {
           }
         }
 
-        // HEURISTIC REPAIR: If the model output a code block but didn't trigger a tool call.
-        // We now trigger type_check FIRST as mandated by the system prompt.
+        // HEURISTIC REPAIR
         if (!toolCalled) {
           final codeBlockRegex = RegExp(r'```(?:python)?\n([\s\S]*?)```');
           final match = codeBlockRegex.firstMatch(fullContent);
@@ -90,13 +96,12 @@ class OllamaLlmService implements LlmService {
           if (match != null) {
             final code = match.group(1)?.trim();
             if (code != null && code.isNotEmpty) {
-              _log(
-                  'Heuristic: Detected code block, triggering mandatory type_check');
+              _log('Heuristic: Triggering type_check for code block');
               controller.add(
                 LlmResponseChunk(
                   toolCalls: [
                     LlmToolCall(
-                      id: 'repaired',
+                      id: 'repaired_${DateTime.now().millisecondsSinceEpoch}',
                       name: 'type_check',
                       arguments: {'code': code},
                     ),
@@ -107,7 +112,7 @@ class OllamaLlmService implements LlmService {
           }
         }
       } on Exception catch (e) {
-        _log('Error: $e');
+        _log('ERROR in stream: $e');
         controller.addError(e);
       } finally {
         await controller.close();

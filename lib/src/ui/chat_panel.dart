@@ -229,13 +229,23 @@ class _ChatPanelState extends State<ChatPanel> {
       _logDebug('Failed to read system_prompt.txt: $e');
     }
 
-    // Filter history to exclude UI-only status messages
+    // Filter history to exclude UI-only status messages.
+    // Also ensures we don't send empty content strings if possible.
     final history = [
       {'role': 'system', 'content': sysPrompt},
       ..._messages.where((m) => !m.isUiOnly).map(
-            (m) => {'role': m.role, 'content': m.content},
-          ),
+        (m) {
+          var content = m.content;
+          // If assistant message is empty (pure tool call), give it a placeholder
+          if (content.isEmpty && m.role == 'assistant') {
+            content = '[Calling tools...]';
+          }
+          return {'role': m.role, 'content': content};
+        },
+      ),
     ];
+
+    _logDebug('Sending history: ${jsonEncode(history)}');
 
     final config = LlmConfig(
       provider: _provider,
@@ -274,6 +284,7 @@ class _ChatPanelState extends State<ChatPanel> {
       }
 
       if (toolCalls.isNotEmpty) {
+        _logDebug('Received ${toolCalls.length} tool calls');
         _toolCallCount++;
         for (final call in toolCalls) {
           // DUPLICATE DETECTION: Check if we are repeating the exact same call
@@ -288,6 +299,8 @@ class _ChatPanelState extends State<ChatPanel> {
           await _handleToolCall(call);
         }
         if (mounted) await _getLlmResponse();
+      } else {
+        _logDebug('No tool calls received, sequence finished.');
       }
     } on Exception catch (e) {
       _logDebug('LLM Error: $e');
@@ -307,8 +320,8 @@ class _ChatPanelState extends State<ChatPanel> {
     setState(() {
       _lastDebugLog =
           '${DateTime.now().toIso8601String()}: $text\n$_lastDebugLog';
-      if (_lastDebugLog.length > 5000) {
-        _lastDebugLog = _lastDebugLog.substring(0, 5000);
+      if (_lastDebugLog.length > 10000) {
+        _lastDebugLog = _lastDebugLog.substring(0, 10000);
       }
     });
   }
@@ -366,6 +379,8 @@ class _ChatPanelState extends State<ChatPanel> {
     } on Exception catch (e) {
       result = {'error': e.toString()};
     }
+
+    _logDebug('Tool result for ${call.name}: ${jsonEncode(result)}');
 
     if (mounted) {
       setState(() {
