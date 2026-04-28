@@ -301,7 +301,6 @@ class _MontyIdeState extends State<MontyIde> {
               ),
               const Divider(height: 1),
               Expanded(
-                flex: 1,
                 child: Row(
                   children: [
                     Expanded(

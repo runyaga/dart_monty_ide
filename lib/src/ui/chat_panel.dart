@@ -271,6 +271,12 @@ class _ChatPanelState extends State<ChatPanel> {
     });
   }
 
+  void _clearChat() {
+    setState(() {
+      _messages.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -285,6 +291,14 @@ class _ChatPanelState extends State<ChatPanel> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               ),
               const Spacer(),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: _clearChat,
+                icon: const Icon(Icons.delete_outline, size: 14),
+                tooltip: 'Clear Chat',
+              ),
+              const SizedBox(width: 8),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -405,12 +419,17 @@ class _ChatPanelState extends State<ChatPanel> {
                     border: InputBorder.none,
                     isDense: true,
                   ),
-                  onSubmitted: (value) => unawaited(_sendMessage()),
+                  onSubmitted: (value) {
+                    unawaited(_sendMessage());
+                  },
                 ),
               ),
               IconButton(
-                onPressed:
-                    _isStreaming ? null : () => unawaited(_sendMessage()),
+                onPressed: _isStreaming
+                    ? null
+                    : () {
+                        unawaited(_sendMessage());
+                      },
                 icon: _isStreaming
                     ? const SizedBox(
                         width: 20,
