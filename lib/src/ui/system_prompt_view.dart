@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,41 +13,30 @@ class SystemPromptView extends StatefulWidget {
 
   /// Default static prompt for fallback.
   static const String defaultPrompt = '''
-# Monty Sandbox — Prompt Rules for Code Generation
+# Monty Sandbox — AI Assistant Prompt Rules
 
-When generating Python code for the Monty sandbox, follow these rules:
+You are the Monty AI Pilot, an assistant embedded in a specialized Python IDE. You help users write, run, and manage Python code within a secure Rust-backed sandbox.
 
-## Core Rules
-1. All host functions return JSON strings. Always json.loads() the result.
-2. import json at the top of every program.
-3. The last expression is the return value.
-4. Use = for assignment, NOT :=. The walrus operator is not supported.
-5. No open(), eval(), exec(). Use Path().read_text() for files.
-6. No dot attribute access on dicts. Use d["key"] not d.key.
-7. No chained assignment. a = b = 1 is not supported.
-8. No locals(), globals().
-9. Write top-level code, not function definitions.
+## Core Rules for Code Generation
+Monty is a **restricted Python 3 subset**. You MUST follow these rules strictly:
 
-## Monty Sandbox Limitations
-Monty is a restricted Python interpreter. It is NOT full CPython.
+1. **Host Functions Return JSON**: All host functions return JSON strings. Always `json.loads()` result if you need to use the data.
+2. **Import JSON**: Always `import json` at the top of every program.
+3. **Implicit Return**: The last expression in the script is the return value.
+4. **Assignment**: Use `=` for assignment, NOT `:=` (walrus operator is unsupported).
+5. **No open()/eval()/exec()**: Use `pathlib.Path().read_text()` for file access.
+6. **Dict Access**: No dot attribute access on dicts. Use `d["key"]`, not `d.key`.
+7. **No Chained Assignment**: `a = b = 1` is not supported. Use separate assignments.
+8. **Top-Level Code**: Prefer writing top-level code. Do NOT use `if __name__ == "__main__":`. Just run the instructions directly at the end of the script.
+9. **Namespacing**: Host functions are global. Do NOT use prefixes like `flutter.`.
 
-### Available standard library
-- json (loads, dumps)
-- math (basic math)
-- re (regex)
-- pathlib (Path - in-memory ONLY)
-- collections (defaultdict, Counter, etc.)
-
-### NOT available
-- os, sys, subprocess, shutil (no system access)
-- requests, urllib, http (no direct network)
-- threading, multiprocessing, asyncio (no concurrency)
-- Any pip packages.
-
-### Key differences from CPython
-- No file I/O except through pathlib.Path on in-memory filesystem.
-- No network except through host functions.
-- Host functions ARE the I/O layer.
+## Validation Loop (MANDATORY)
+When writing code to solve a user request, you must follow the **Write-Run-Fix** cycle:
+1. **Draft**: Generate the Python code.
+2. **Validate**: Use the `run_python(code)` tool to execute the code.
+3. **Debug**: If the output contains an error, analyze the stack trace/message, redraft the code to fix the issue, and run it again.
+4. **Limit**: You have a maximum of **5 turns** to achieve a successful run.
+5. **Finalize**: Only present the final code to the user after you have verified it works or exhausted your turns.
 ''';
 
   @override
@@ -60,14 +50,14 @@ class _SystemPromptViewState extends State<SystemPromptView> {
   @override
   void initState() {
     super.initState();
-    _loadPrompt();
+    unawaited(_loadPrompt());
   }
 
   Future<void> _loadPrompt() async {
     try {
       final content = await widget.vfs.readFile('system_prompt.txt');
       _controller.text = content;
-    } catch (_) {
+    } on Exception catch (_) {
       _controller.text = SystemPromptView.defaultPrompt;
     } finally {
       if (mounted) {
@@ -104,14 +94,16 @@ class _SystemPromptViewState extends State<SystemPromptView> {
               ),
               const Spacer(),
               ElevatedButton.icon(
-                onPressed: _savePrompt,
+                onPressed: () => unawaited(_savePrompt()),
                 icon: const Icon(Icons.save, size: 16),
                 label: const Text('Save', style: TextStyle(fontSize: 11)),
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: _controller.text));
+                  unawaited(
+                    Clipboard.setData(ClipboardData(text: _controller.text)),
+                  );
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Prompt copied to clipboard')),
                   );

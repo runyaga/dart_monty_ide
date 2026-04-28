@@ -44,7 +44,6 @@ class MontyIdeController extends ChangeNotifier {
     if (_isInitialized) return;
 
     debugPrint('Initializing Monty Platform...');
-    // Ensure WASM or FFI bindings are loaded.
     await DartMonty.ensureInitialized();
     debugPrint('Monty Platform Initialized.');
 
@@ -89,16 +88,19 @@ class MontyIdeController extends ChangeNotifier {
         final montyExc = result.error;
         lastErrorLine = montyExc?.lineNumber;
 
-        // Fallback: Parse line number
+        // Fallback: Parse line number from message text like "at line 3"
         if (lastErrorLine == null && montyExc != null) {
-          final lineMatch = RegExp(r'at line (\d+)').firstMatch(montyExc.message);
+          final lineMatch =
+              RegExp(r'at line (\d+)').firstMatch(montyExc.message);
           if (lineMatch != null) {
             lastErrorLine = int.tryParse(lineMatch.group(1)!);
           }
         }
 
+        // Fallback: Translate byte range
         if (lastErrorLine == null && montyExc != null) {
-          final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(montyExc.message);
+          final byteMatch =
+              RegExp(r'at byte range (\d+)').firstMatch(montyExc.message);
           if (byteMatch != null) {
             final startByte = int.tryParse(byteMatch.group(1)!);
             if (startByte != null) {
@@ -111,8 +113,11 @@ class MontyIdeController extends ChangeNotifier {
         if (montyExc != null) {
           final type = montyExc.excType ?? 'PythonError';
           errorMessage = '[$type] ${montyExc.message}\n';
-          if (montyExc.message.contains('Simple statements must be separated') && code.contains('print ')) {
-            errorMessage += 'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
+          if (montyExc.message
+                  .contains('Simple statements must be separated') &&
+              code.contains('print ')) {
+            errorMessage +=
+                'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
           }
         } else {
           errorMessage = 'Error: Unknown execution failure\n';
@@ -132,7 +137,7 @@ class MontyIdeController extends ChangeNotifier {
     } on MontyResourceError catch (e) {
       _outputController.add('[ResourceError] ${e.message}\n');
       return null;
-    } catch (e, stack) {
+    } on Exception catch (e, stack) {
       debugPrint('Internal System Error: $e');
       debugPrint('Stack Trace: $stack');
       _outputController.add('[SystemException] $e\n');
@@ -154,23 +159,6 @@ class MontyIdeController extends ChangeNotifier {
       }
     }
     return lineCount;
-  }
-
-  /// Executes code without emitting to the output stream or changing error state.
-  ///
-  /// Used for introspection and background state updates.
-  Future<MontyResult?> executeSilent(String code) async {
-    if (!_isInitialized) return null;
-    debugPrint('Executing Silent Code: ${code.trim()}');
-    try {
-      final handle = _runtime!.execute(code);
-      final res = await handle.result;
-      debugPrint('Silent execution complete. Result: ${res.value}');
-      return res;
-    } catch (e) {
-      debugPrint('Silent execution error: $e');
-      return null;
-    }
   }
 
   /// Clears the interpreter state.

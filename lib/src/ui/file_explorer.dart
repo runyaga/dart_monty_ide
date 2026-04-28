@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 
@@ -27,11 +28,11 @@ class _FileExplorerState extends State<FileExplorer> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    unawaited(_refresh());
   }
 
   Future<void> _refresh() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final files = await widget.vfs.listFiles();
       if (mounted) {
@@ -103,12 +104,12 @@ class _FileExplorerState extends State<FileExplorer> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 IconButton(
-                  onPressed: _refresh,
+                  onPressed: () => unawaited(_refresh()),
                   icon: const Icon(Icons.refresh, size: 18),
                   tooltip: 'Refresh Files',
                 ),
                 IconButton(
-                  onPressed: _createFile,
+                  onPressed: () => unawaited(_createFile()),
                   icon: const Icon(Icons.add, size: 18),
                   tooltip: 'New File',
                 ),

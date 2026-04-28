@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:dart_monty_ide/src/llm/ollama_service.dart';
 import 'package:dart_monty_ide/src/llm/open_responses_service.dart';
@@ -6,6 +8,7 @@ import 'package:dart_monty_ide/src/ui/system_prompt_view.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 
 /// A message in the chat.
 class ChatMessage {
@@ -15,27 +18,35 @@ class ChatMessage {
     required this.content,
   });
 
-  /// Role of the message sender (user or assistant).
+  /// Role of the message sender.
   final String role;
 
   /// Content of the message.
   String content;
 }
 
-/// A panel for interacting with an LLM to generate Python code.
+/// A panel for interacting with an LLM with tool support.
 class ChatPanel extends StatefulWidget {
   /// Creates a [ChatPanel].
   const ChatPanel({
     required this.vfs,
+    required this.controller,
     required this.onCopyToEditor,
+    required this.onClose,
     super.key,
   });
 
-  /// The VFS to load the system prompt from.
+  /// The VFS for file operations.
   final MontyVfs vfs;
+
+  /// The Monty IDE controller for code execution.
+  final MontyIdeController controller;
 
   /// Callback when code should be copied to the editor.
   final ValueChanged<String> onCopyToEditor;
+
+  /// Callback when the panel should be closed.
+  final VoidCallback onClose;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -46,12 +57,11 @@ class _ChatPanelState extends State<ChatPanel> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  // Settings controllers
-  final TextEditingController _ollamaUrlController = 
-      TextEditingController(text: 'http://localhost:11434');
-  final TextEditingController _modelController = 
+  final TextEditingController _ollamaUrlController =
+      TextEditingController(text: 'http://localhost:11434/api');
+  final TextEditingController _modelController =
       TextEditingController(text: 'gpt-oss:latest');
-  
+
   LlmProvider _provider = LlmProvider.ollama;
   bool _isStreaming = false;
   bool _showSettings = false;
@@ -72,57 +82,123 @@ class _ChatPanelState extends State<ChatPanel> {
     _scrollController.dispose();
     _ollamaUrlController.dispose();
     _modelController.dispose();
+    _ollamaService.dispose();
+    _openResponsesService.dispose();
     super.dispose();
   }
 
   LlmService get _currentService =>
       _provider == LlmProvider.ollama ? _ollamaService : _openResponsesService;
 
+  List<LlmTool> get _tools => [
+        const LlmTool(
+          name: 'run_python',
+          description:
+              'Executes Monty Python code in the sandbox and returns output.',
+          parameters: {
+            'type': 'object',
+            'properties': {
+              'code': {
+                'type': 'string',
+                'description': 'The Python code to execute.',
+              },
+            },
+            'required': ['code'],
+          },
+        ),
+        const LlmTool(
+          name: 'write_file',
+          description: 'Creates or updates a file in the workspace.',
+          parameters: {
+            'type': 'object',
+            'properties': {
+              'path': {
+                'type': 'string',
+                'description': 'The filename (e.g. "script.py").',
+              },
+              'content': {
+                'type': 'string',
+                'description': 'The text content to write.',
+              },
+            },
+            'required': ['path', 'content'],
+          },
+        ),
+      ];
+
   Future<void> _sendMessage() async {
     final prompt = _inputController.text.trim();
     if (prompt.isEmpty || _isStreaming) return;
 
     _inputController.clear();
-    setState(() {
-      _messages.add(ChatMessage(role: 'user', content: prompt));
-      _messages.add(ChatMessage(role: 'assistant', content: ''));
-      _isStreaming = true;
-    });
+    if (mounted) {
+      setState(() {
+        _messages.add(ChatMessage(role: 'user', content: prompt));
+        _isStreaming = true;
+      });
+    }
 
     _scrollToBottom();
+    await _getLlmResponse();
+  }
 
-    // Fetch the current system prompt from disk
+  Future<void> _getLlmResponse() async {
     String sysPrompt;
     try {
       sysPrompt = await widget.vfs.readFile('system_prompt.txt');
-    } catch (_) {
+    } on Exception catch (e) {
+      debugPrint(
+        'ChatPanel: Failed to read system_prompt.txt, using fallback: $e',
+      );
       sysPrompt = SystemPromptView.defaultPrompt;
     }
 
+    final history = [
+      {'role': 'system', 'content': sysPrompt},
+      ..._messages.map((m) => {'role': m.role, 'content': m.content}),
+    ];
+
     final config = LlmConfig(
       provider: _provider,
-      baseUrl: _provider == LlmProvider.ollama
-          ? '${_ollamaUrlController.text.trim()}/api'
-          : 'http://localhost:8080/v1',
+      baseUrl: _ollamaUrlController.text.trim(),
       model: _modelController.text.trim(),
     );
 
+    if (mounted) {
+      setState(() {
+        _messages.add(ChatMessage(role: 'assistant', content: ''));
+      });
+    }
+
     try {
       final stream = _currentService.streamResponse(
-        prompt: prompt,
-        systemPrompt: sysPrompt,
+        messages: history,
         config: config,
+        tools: _tools,
       );
 
-      await for (final delta in stream) {
-        if (mounted) {
-          setState(() {
-            _messages.last.content += delta;
-          });
-          _scrollToBottom();
-        }
+      final toolCalls = <LlmToolCall>[];
+
+      await for (final chunk in stream) {
+        if (!mounted) break;
+        setState(() {
+          if (chunk.text != null) {
+            _messages.last.content += chunk.text!;
+          }
+          if (chunk.toolCalls != null) {
+            toolCalls.addAll(chunk.toolCalls!);
+          }
+        });
+        _scrollToBottom();
       }
-    } catch (e) {
+
+      if (toolCalls.isNotEmpty) {
+        for (final call in toolCalls) {
+          await _handleToolCall(call);
+        }
+        if (mounted) await _getLlmResponse();
+      }
+    } on Exception catch (e) {
       if (mounted) {
         setState(() {
           _messages.last.content += '\n\n**Error:** $e';
@@ -135,13 +211,61 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
+  Future<void> _handleToolCall(LlmToolCall call) async {
+    if (mounted) {
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            role: 'assistant',
+            content: '🛠️ Calling tool: ${call.name}...',
+          ),
+        );
+      });
+    }
+    _scrollToBottom();
+
+    Object? result;
+    try {
+      if (call.name == 'run_python') {
+        final code = (call.arguments['code'] as String?) ?? '';
+        final res = await widget.controller.execute(code);
+        result = {
+          'output': res?.printOutput,
+          'error': res?.error?.message,
+          'value': res?.value.toString(),
+        };
+      } else if (call.name == 'write_file') {
+        final path = (call.arguments['path'] as String?) ?? 'untitled.py';
+        final content = (call.arguments['content'] as String?) ?? '';
+        await widget.vfs.writeFile(path, content);
+        result = {'status': 'success', 'path': path};
+      }
+    } on Exception catch (e) {
+      result = {'error': e.toString()};
+    }
+
+    if (mounted) {
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            role: 'tool',
+            content: jsonEncode(result),
+          ),
+        );
+      });
+      _scrollToBottom();
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+        unawaited(
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          ),
         );
       }
     });
@@ -156,14 +280,20 @@ class _ChatPanelState extends State<ChatPanel> {
           color: Theme.of(context).secondaryHeaderColor,
           child: Row(
             children: [
-              const Text('ASSISTANT',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+              const Text(
+                'ASSISTANT',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
               const Spacer(),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: () => setState(() => _showSettings = !_showSettings),
-                icon: Icon(Icons.settings, size: 14, color: _showSettings ? Colors.blue : null),
+                icon: Icon(
+                  Icons.settings,
+                  size: 14,
+                  color: _showSettings ? Colors.blue : null,
+                ),
                 tooltip: 'LLM Settings',
               ),
               const SizedBox(width: 8),
@@ -181,6 +311,14 @@ class _ChatPanelState extends State<ChatPanel> {
                 onChanged: (v) {
                   if (v != null) setState(() => _provider = v);
                 },
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close, size: 16),
+                tooltip: 'Collapse Assistant',
               ),
             ],
           ),
@@ -220,6 +358,8 @@ class _ChatPanelState extends State<ChatPanel> {
             itemCount: _messages.length,
             itemBuilder: (context, index) {
               final msg = _messages[index];
+              if (msg.role == 'tool') return const SizedBox.shrink();
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Column(
@@ -238,7 +378,8 @@ class _ChatPanelState extends State<ChatPanel> {
                       data: msg.content,
                       selectable: true,
                       builders: {
-                        'code': _CodeBlockBuilder(onCopy: widget.onCopyToEditor),
+                        'code':
+                            _CodeBlockBuilder(onCopy: widget.onCopyToEditor),
                       },
                     ),
                   ],
@@ -250,8 +391,9 @@ class _ChatPanelState extends State<ChatPanel> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            border:
-                Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+            border: Border(
+              top: BorderSide(color: Theme.of(context).dividerColor),
+            ),
           ),
           child: Row(
             children: [
@@ -263,16 +405,18 @@ class _ChatPanelState extends State<ChatPanel> {
                     border: InputBorder.none,
                     isDense: true,
                   ),
-                  onSubmitted: (_) => _sendMessage(),
+                  onSubmitted: (value) => unawaited(_sendMessage()),
                 ),
               ),
               IconButton(
-                onPressed: _isStreaming ? null : _sendMessage,
+                onPressed:
+                    _isStreaming ? null : () => unawaited(_sendMessage()),
                 icon: _isStreaming
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.send),
               ),
             ],
@@ -284,11 +428,14 @@ class _ChatPanelState extends State<ChatPanel> {
 }
 
 class _CodeBlockBuilder extends MarkdownElementBuilder {
+  /// Creates a [_CodeBlockBuilder].
   _CodeBlockBuilder({required this.onCopy});
+
+  /// Callback when code should be copied to the editor.
   final ValueChanged<String> onCopy;
 
   @override
-  Widget? visitElementAfter(element, preferredStyle) {
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
     final text = element.textContent;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -300,8 +447,10 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
             color: Colors.grey[200],
             child: Row(
               children: [
-                const Text('Python',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Python',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                ),
                 const Spacer(),
                 InkWell(
                   onTap: () => onCopy(text),
@@ -322,7 +471,10 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
             child: Text(
               text,
               style: const TextStyle(
-                  color: Colors.white, fontFamily: 'monospace', fontSize: 12),
+                color: Colors.white,
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
             ),
           ),
         ],

@@ -143,22 +143,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.3"
-  fetch_api:
-    dependency: transitive
-    description:
-      name: fetch_api
-      sha256: "24cbd5616f3d4008c335c197bb90bfa0eb43b9e55c6de5c60d1f805092636034"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.3.1"
-  fetch_client:
-    dependency: transitive
-    description:
-      name: fetch_client
-      sha256: "2125ffb6325e0045cc3cbfca1a87e6defe9afa27d85dc14857c1cf3835a9a636"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.1"
   ffi:
     dependency: transitive
     description:
@@ -193,14 +177,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  freezed_annotation:
-    dependency: transitive
-    description:
-      name: freezed_annotation
-      sha256: c2e2d632dd9b8a2b7751117abcfc2b4888ecfe181bd9fca7170d9ef02e595fe2
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.4"
   frontend_server_client:
     dependency: transitive
     description:
@@ -281,14 +257,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
-  json_annotation:
-    dependency: transitive
-    description:
-      name: json_annotation
-      sha256: cb09e7dac6210041fad964ed7fbee004f14258b4eca4040f72d1234062ace4c8
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.11.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -322,7 +290,7 @@ packages:
     source: hosted
     version: "1.3.0"
   markdown:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: markdown
       sha256: ee85086ad7698b42522c6ad42fe195f1b9898e4d974a1af4576c1a3a176cada9
@@ -389,10 +357,10 @@ packages:
     dependency: "direct main"
     description:
       name: ollama_dart
-      sha256: "760cc0d1d26bb957b9fd3bb31985ebbfab5598076670185405469ec2600a5439"
+      sha256: "97f4c01c120dfcee98ce6686a7f74098f941a3ee580b686c7f57f4444aba906d"
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.2"
+    version: "2.1.0"
   open_responses:
     dependency: "direct main"
     description:

@@ -6,11 +6,15 @@ class ExternalsInspector extends StatelessWidget {
   /// Creates an [ExternalsInspector].
   const ExternalsInspector({
     required this.controller,
+    required this.onClose,
     super.key,
   });
 
   /// The controller to inspect.
   final MontyIdeController controller;
+
+  /// Callback when the panel should be closed.
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -24,11 +28,24 @@ class ExternalsInspector extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.all(8),
-            child: Text(
-              'EXTERNALS',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            color: Theme.of(context).secondaryHeaderColor,
+            child: Row(
+              children: [
+                const Text(
+                  'EXTERNALS',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+                const Spacer(),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close, size: 16),
+                  tooltip: 'Collapse Externals',
+                ),
+              ],
             ),
           ),
           if (extensions.isEmpty)
@@ -50,7 +67,8 @@ class ExternalsInspector extends StatelessWidget {
                       ),
                     ),
                     children: ext.functions.map((fn) {
-                      final args = fn.schema.params.map((p) => p.name).join(', ');
+                      final args =
+                          fn.schema.params.map((p) => p.name).join(', ');
                       return ListTile(
                         title: Text(
                           '${fn.schema.name}($args)',

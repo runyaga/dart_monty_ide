@@ -17,25 +17,80 @@ class LlmConfig {
     this.baseUrl = 'http://localhost:11434/api',
     this.model = 'gpt-oss:latest',
     this.apiKey,
-  });  /// The selected provider.
+  });
+
+  /// The selected provider.
   final LlmProvider provider;
 
-  /// Base URL for the service (e.g. Ollama host).
+  /// Base URL for the service.
   final String baseUrl;
 
-  /// Model name (e.g. llama3, gpt-4).
+  /// Model name.
   final String model;
 
-  /// Optional API key for remote services.
+  /// Optional API key.
   final String? apiKey;
+}
+
+/// Represents a tool that the LLM can call.
+class LlmTool {
+  /// Creates a [LlmTool].
+  const LlmTool({
+    required this.name,
+    required this.description,
+    required this.parameters,
+  });
+
+  /// The tool name.
+  final String name;
+
+  /// Tool description.
+  final String description;
+
+  /// Tool parameter schema.
+  final Map<String, dynamic> parameters;
+}
+
+/// Represents a call to a tool by the LLM.
+class LlmToolCall {
+  /// Creates a [LlmToolCall].
+  const LlmToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+
+  /// The unique call ID.
+  final String id;
+
+  /// The tool name.
+  final String name;
+
+  /// The arguments passed to the tool.
+  final Map<String, dynamic> arguments;
+}
+
+/// A response chunk from the LLM, which can be text or a tool call.
+class LlmResponseChunk {
+  /// Creates a [LlmResponseChunk].
+  const LlmResponseChunk({this.text, this.toolCalls});
+
+  /// The text content of the chunk.
+  final String? text;
+
+  /// Any tool calls in the chunk.
+  final List<LlmToolCall>? toolCalls;
 }
 
 /// Abstract base class for LLM interactions.
 abstract interface class LlmService {
-  /// Streams a response from the LLM based on the [prompt] and [systemPrompt].
-  Stream<String> streamResponse({
-    required String prompt,
-    required String systemPrompt,
+  /// Streams a response from the LLM.
+  Stream<LlmResponseChunk> streamResponse({
+    required List<Map<String, String>> messages,
     required LlmConfig config,
+    List<LlmTool>? tools,
   });
+
+  /// Releases resources held by the service.
+  void dispose();
 }

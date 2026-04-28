@@ -45,6 +45,9 @@ class _MontyIdeState extends State<MontyIde> {
   bool _showExternals = false;
   bool _showAssistant = true;
 
+  double _assistantWidth = 350;
+  double _externalsWidth = 250;
+
   final StreamController<String> _consoleStreamController =
       StreamController<String>.broadcast();
 
@@ -55,6 +58,7 @@ class _MontyIdeState extends State<MontyIde> {
     _registry = widget.registry ?? WidgetRegistry();
     _controller.addListener(_onControllerChanged);
     _controller.output.listen(_consoleStreamController.add);
+    _editorController.addListener(_onEditorChanged);
     unawaited(_initController());
   }
 
@@ -63,33 +67,29 @@ class _MontyIdeState extends State<MontyIde> {
       final lineIndex = _controller.lastErrorLine! - 1;
       final lines = _editorController.text.split('\n');
       if (lineIndex >= 0 && lineIndex < lines.length) {
-        final lineText = lines[lineIndex];
         _editorController.selection = CodeLineSelection(
           baseIndex: lineIndex,
           baseOffset: 0,
           extentIndex: lineIndex,
-          extentOffset: lineText.length,
+          extentOffset: lines[lineIndex].length,
         );
       }
     }
   }
 
-  Future<void> _saveFile() async {
-    if (_currentFilePath == null) return;
-    debugPrint('Saving file: $_currentFilePath');
-    setState(() => _isSaving = true);
-    try {
-      await widget.vfs.writeFile(_currentFilePath!, _editorController.text);
-      debugPrint('File saved successfully.');
-    } catch (e) {
-      debugPrint('Error saving file: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving file: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+  Timer? _saveTimer;
+  void _onEditorChanged() {
+    if (_currentFilePath != null) {
+      _saveTimer?.cancel();
+      _saveTimer = Timer(const Duration(milliseconds: 500), () async {
+        if (_currentFilePath != null) {
+          if (mounted) setState(() => _isSaving = true);
+          await widget.vfs.writeFile(_currentFilePath!, _editorController.text);
+          if (mounted) {
+            setState(() => _isSaving = false);
+          }
+        }
+      });
     }
   }
 
@@ -117,7 +117,9 @@ class _MontyIdeState extends State<MontyIde> {
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
+    _editorController.removeListener(_onEditorChanged);
     if (widget.controller == null) {
       _controller.dispose();
     }
@@ -137,13 +139,40 @@ class _MontyIdeState extends State<MontyIde> {
     });
   }
 
+  Future<void> _saveFile() async {
+    if (_currentFilePath == null) return;
+    debugPrint('Saving file: $_currentFilePath');
+    setState(() => _isSaving = true);
+    try {
+      await widget.vfs.writeFile(_currentFilePath!, _editorController.text);
+      debugPrint('File saved successfully.');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saved $_currentFilePath'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      debugPrint('Error saving file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving file: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         FileExplorer(
           vfs: widget.vfs,
-          onFileSelected: _loadFile,
+          onFileSelected: (path) => unawaited(_loadFile(path)),
         ),
         Expanded(
           child: Column(
@@ -154,11 +183,14 @@ class _MontyIdeState extends State<MontyIde> {
                 child: Row(
                   children: [
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                       child: Text(
                         'EDITOR',
                         style: TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.bold),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const VerticalDivider(width: 20),
@@ -198,9 +230,13 @@ class _MontyIdeState extends State<MontyIde> {
                     ElevatedButton.icon(
                       onPressed: _controller.isExecuting ? null : _handleRun,
                       icon: const Icon(Icons.play_arrow, size: 16),
-                      label: const Text('RUN',
-                          style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.bold)),
+                      label: const Text(
+                        'RUN',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
@@ -209,7 +245,9 @@ class _MontyIdeState extends State<MontyIde> {
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      onPressed: _currentFilePath == null ? null : _saveFile,
+                      onPressed: _currentFilePath == null
+                          ? null
+                          : () => unawaited(_saveFile()),
                       icon: const Icon(Icons.save, size: 20),
                       tooltip: 'Save File',
                     ),
@@ -282,7 +320,9 @@ class _MontyIdeState extends State<MontyIde> {
                           const Text(
                             'PREVIEW',
                             style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 9),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 9,
+                            ),
                           ),
                           const Spacer(),
                           Center(
@@ -292,7 +332,7 @@ class _MontyIdeState extends State<MontyIde> {
                               builder: (context, props) {
                                 final colorStr = props['color'] as String?;
                                 final sizeNum = props['size'] as num?;
-                                final size = sizeNum?.toDouble() ?? 40.0;
+                                final size = sizeNum?.toDouble() ?? 40;
 
                                 Color color = Colors.grey[300]!;
                                 if (colorStr == 'teal') color = Colors.teal;
@@ -335,20 +375,65 @@ class _MontyIdeState extends State<MontyIde> {
             ],
           ),
         ),
-        if (_showAssistant)
-          Container(
-            width: 300,
-            decoration: BoxDecoration(
-              border: Border(
-                  left: BorderSide(color: Theme.of(context).dividerColor)),
-            ),
+        if (_showAssistant) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _assistantWidth -= delta;
+                if (_assistantWidth < 100) _assistantWidth = 100;
+              });
+            },
+          ),
+          SizedBox(
+            width: _assistantWidth,
             child: ChatPanel(
               vfs: widget.vfs,
+              controller: _controller,
               onCopyToEditor: _handleCopyToEditor,
+              onClose: () => setState(() => _showAssistant = false),
             ),
           ),
-        if (_showExternals) ExternalsInspector(controller: _controller),
+        ],
+        if (_showExternals) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _externalsWidth -= delta;
+                if (_externalsWidth < 100) _externalsWidth = 100;
+              });
+            },
+          ),
+          SizedBox(
+            width: _externalsWidth,
+            child: ExternalsInspector(
+              controller: _controller,
+              onClose: () => setState(() => _showExternals = false),
+            ),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+class _HorizontalResizer extends StatelessWidget {
+  const _HorizontalResizer({required this.onDrag});
+  final ValueChanged<double> onDrag;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: (details) {
+        onDrag(details.delta.dx);
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        child: Container(
+          width: 4,
+          color: Theme.of(context).dividerColor.withAlpha(25),
+        ),
+      ),
     );
   }
 }

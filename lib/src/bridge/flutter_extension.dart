@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 
@@ -8,6 +9,7 @@ class MontyFlutterExtension extends MontyExtension {
 
   /// The registry to update.
   final WidgetRegistry registry;
+  final math.Random _random = math.Random();
 
   @override
   String get namespace => 'flutter';
@@ -25,8 +27,8 @@ class MontyFlutterExtension extends MontyExtension {
             ],
           ),
           handler: (args, ctx) async {
-            final id = args['id'] as String;
-            final key = args['key'] as String;
+            final id = args['id'] as String? ?? '';
+            final key = args['key'] as String? ?? '';
             final value = args['value'];
             registry.setProperty(id, key, value);
             return null;
@@ -42,8 +44,8 @@ class MontyFlutterExtension extends MontyExtension {
             ],
           ),
           handler: (args, ctx) async {
-            final id = args['id'] as String;
-            final key = args['key'] as String;
+            final id = args['id'] as String? ?? '';
+            final key = args['key'] as String? ?? '';
             return registry.getProperty(id, key);
           },
         ),
@@ -57,10 +59,45 @@ class MontyFlutterExtension extends MontyExtension {
             ],
           ),
           handler: (args, ctx) async {
-            final id = args['id'] as String;
-            final color = args['color'] as String;
+            final id = args['id'] as String? ?? '';
+            final color = args['color'] as String? ?? '';
             registry.setProperty(id, 'color', color);
             return null;
+          },
+        ),
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'flutter_randint',
+            description: 'Returns a random integer N such that a <= N <= b. '
+                'Identical to random.randint(a, b).',
+            params: [
+              HostParam(name: 'a', type: HostParamType.number),
+              HostParam(name: 'b', type: HostParamType.number),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final aValue = args['a'];
+            final bValue = args['b'];
+            final a = (aValue is num) ? aValue.toInt() : 0;
+            final b = (bValue is num) ? bValue.toInt() : 0;
+            if (b <= a) return a;
+            return a + _random.nextInt(b - a + 1);
+          },
+        ),
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'flutter_shuffle',
+            description: 'Shuffles a list of items and returns a new list.',
+            params: [
+              HostParam(name: 'items', type: HostParamType.list),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final itemsValue = args['items'];
+            final items = itemsValue is Iterable
+                ? List<Object?>.from(itemsValue)
+                : <Object?>[];
+            return items..shuffle(_random);
           },
         ),
       ];
