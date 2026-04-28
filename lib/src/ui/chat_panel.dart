@@ -349,6 +349,23 @@ class _ChatPanelState extends State<ChatPanel> {
     });
   }
 
+  void _viewSystemPrompt() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: 600,
+          height: 600,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SystemPromptView(vfs: widget.vfs),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -363,6 +380,14 @@ class _ChatPanelState extends State<ChatPanel> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               ),
               const Spacer(),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: _viewSystemPrompt,
+                icon: const Icon(Icons.shield_outlined, size: 14),
+                tooltip: 'View System Prompt',
+              ),
+              const SizedBox(width: 8),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
