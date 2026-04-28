@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dart_monty_core/dart_monty_core.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:dart_monty_ide/src/llm/ollama_service.dart';
@@ -135,9 +136,24 @@ class _ChatPanelState extends State<ChatPanel> {
 
   List<LlmTool> get _tools => [
         const LlmTool(
+          name: 'type_check',
+          description:
+              'Performs static analysis on the code and returns a list of typing errors. ALWAYS call this before run_python.',
+          parameters: {
+            'type': 'object',
+            'properties': {
+              'code': {
+                'type': 'string',
+                'description': 'The Python code to type-check.',
+              },
+            },
+            'required': ['code'],
+          },
+        ),
+        const LlmTool(
           name: 'run_python',
           description:
-              'Executes Monty Python code in the sandbox and returns output.',
+              'Executes Monty Python code in the sandbox and returns output. Only call if type_check returns no errors.',
           parameters: {
             'type': 'object',
             'properties': {
@@ -189,14 +205,15 @@ class _ChatPanelState extends State<ChatPanel> {
 
   Future<void> _getLlmResponse() async {
     // Check if we hit the turn limit to prevent infinite loops
-    if (_toolCallCount >= 5) {
+    if (_toolCallCount >= 10) {
+      // Increased limit to account for type_check + run_python sequence
       _logDebug('Turn limit reached. Stopping tool chain.');
       if (mounted) {
-        setState(() => _isStreaming = false);
         setState(() {
+          _isStreaming = false;
           _messages.add(ChatMessage(
             role: 'assistant',
-            content: '⚠️ Stopping: Verification turn limit (5) reached.',
+            content: '⚠️ Stopping: Verification turn limit (10) reached.',
           ));
         });
       }
@@ -306,7 +323,25 @@ class _ChatPanelState extends State<ChatPanel> {
 
     Object? result;
     try {
-      if (call.name == 'run_python') {
+      if (call.name == 'type_check') {
+        final code = (call.arguments['code'] as String?) ?? '';
+        final errors = await Monty.typeCheck(code);
+        if (errors.isEmpty) {
+          result = {'ok': true, 'errors': []};
+        } else {
+          result = {
+            'ok': false,
+            'errors': errors
+                .map((e) => {
+                      'line': e.line,
+                      'col': e.column,
+                      'code': e.code,
+                      'message': e.message,
+                    })
+                .toList(),
+          };
+        }
+      } else if (call.name == 'run_python') {
         final code = (call.arguments['code'] as String?) ?? '';
         widget.onAssistantCode?.call(code);
         final res = await widget.controller.execute(code);
