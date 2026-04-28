@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
-import 'package:dart_monty_ide/src/ui/chat_panel.dart';
 import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
@@ -11,8 +10,7 @@ import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
 
-/// A full-featured Python IDE widget with file management, Flutter Bridge,
-/// and AI Assistant.
+/// A full-featured Python IDE widget with file management and Flutter Bridge.
 class MontyIde extends StatefulWidget {
   /// Creates a [MontyIde].
   const MontyIde({
@@ -45,10 +43,8 @@ class _MontyIdeState extends State<MontyIde> {
   String? _currentFilePath;
   bool _isSaving = false;
   bool _showExternals = false;
-  bool _showAssistant = true;
   bool _viewingAssistantBuffer = false;
 
-  double _assistantWidth = 350;
   double _externalsWidth = 250;
 
   int _fileExplorerVersion = 0;
@@ -142,20 +138,11 @@ class _MontyIdeState extends State<MontyIde> {
     unawaited(_controller.execute(code));
   }
 
-  void _handleCopyToEditor(String code) {
-    setState(() {
-      _editorController.text = code;
-      _viewingAssistantBuffer = false;
-    });
-  }
-
   Future<void> _saveFile() async {
     if (_currentFilePath == null) return;
-    debugPrint('Saving file: $_currentFilePath');
     setState(() => _isSaving = true);
     try {
       await widget.vfs.writeFile(_currentFilePath!, _editorController.text);
-      debugPrint('File saved successfully.');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -165,7 +152,6 @@ class _MontyIdeState extends State<MontyIde> {
         );
       }
     } on Exception catch (e) {
-      debugPrint('Error saving file: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving file: $e')),
@@ -174,19 +160,6 @@ class _MontyIdeState extends State<MontyIde> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
-  }
-
-  void _handleFileWritten() {
-    setState(() {
-      _fileExplorerVersion++;
-    });
-  }
-
-  void _handleAssistantCode(String code) {
-    setState(() {
-      _viewingAssistantBuffer = true;
-    });
-    _assistantBufferController.add(code);
   }
 
   Color _parseColor(String? colorStr, Color defaultColor) {
@@ -227,7 +200,7 @@ class _MontyIdeState extends State<MontyIde> {
                           setState(() => _viewingAssistantBuffer = false),
                     ),
                     _TabButton(
-                      label: 'LLM',
+                      label: 'AI PILOT BUFFER',
                       isActive: _viewingAssistantBuffer,
                       onTap: () =>
                           setState(() => _viewingAssistantBuffer = true),
@@ -267,32 +240,32 @@ class _MontyIdeState extends State<MontyIde> {
                       ),
                     const Spacer(),
                     ListenableBuilder(
-                        listenable: _registry,
-                        builder: (context, _) {
-                          final props =
-                              _registry.getProperties('ide_run_button') ?? {};
-                          final color = _parseColor(
-                              props['color'] as String?, Colors.green);
+                      listenable: _registry,
+                      builder: (context, _) {
+                        final props =
+                            _registry.getProperties('ide_run_button') ?? {};
+                        final color = _parseColor(
+                            props['color'] as String?, Colors.green);
 
-                          return ElevatedButton.icon(
-                            onPressed:
-                                _controller.isExecuting ? null : _handleRun,
-                            icon: const Icon(Icons.play_arrow, size: 16),
-                            label: const Text(
-                              'RUN',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
+                        return ElevatedButton.icon(
+                          onPressed:
+                              _controller.isExecuting ? null : _handleRun,
+                          icon: const Icon(Icons.play_arrow, size: 16),
+                          label: const Text(
+                            'RUN',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: color,
-                              foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                            ),
-                          );
-                        }),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: color,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(width: 8),
                     IconButton(
                       onPressed: _currentFilePath == null
@@ -319,17 +292,6 @@ class _MontyIdeState extends State<MontyIde> {
                       },
                       icon: const Icon(Icons.delete_sweep_outlined, size: 20),
                       tooltip: 'Clear Console',
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        setState(() => _showAssistant = !_showAssistant);
-                      },
-                      icon: Icon(
-                        _showAssistant ? Icons.chat : Icons.chat_outlined,
-                        size: 20,
-                        color: _showAssistant ? Colors.purple : null,
-                      ),
-                      tooltip: 'Toggle Assistant',
                     ),
                     IconButton(
                       onPressed: () {
@@ -435,27 +397,6 @@ class _MontyIdeState extends State<MontyIde> {
             ],
           ),
         ),
-        if (_showAssistant) ...[
-          _HorizontalResizer(
-            onDrag: (delta) {
-              setState(() {
-                _assistantWidth -= delta;
-                if (_assistantWidth < 100) _assistantWidth = 100;
-              });
-            },
-          ),
-          SizedBox(
-            width: _assistantWidth,
-            child: ChatPanel(
-              vfs: widget.vfs,
-              controller: _controller,
-              onCopyToEditor: _handleCopyToEditor,
-              onClose: () => setState(() => _showAssistant = false),
-              onFileWritten: _handleFileWritten,
-              onAssistantCode: (code) => _assistantBufferController.add(code),
-            ),
-          ),
-        ],
         if (_showExternals) ...[
           _HorizontalResizer(
             onDrag: (delta) {
