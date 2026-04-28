@@ -42,23 +42,30 @@ class OllamaLlmService implements LlmService {
       );
     }).toList();
 
+    // SIMPLE CONTROL: Force low temperature and strict stop sequences
     final request = ChatRequest(
       model: config.model,
       messages: ollamaMessages,
       tools: ollamaTools,
+      options: const ModelOptions(
+        temperature: 0.1, // Less creative, more predictable
+        numPredict: 2048, // Allow for longer code generation
+        stop: StopSequence.list(['<|end_of_text|>', 'USER:', 'ASSISTANT:']),
+      ),
     );
 
-    _log('Requesting ${config.model}');
+    _log('Requesting ${config.model} (T=0.1)');
 
     unawaited(() async {
       var fullContent = '';
-      var heuristicTriggered = false;
+      var toolCalled = false;
 
       try {
         final stream = client.chat.createStream(request: request);
         await for (final chunk in stream) {
           final delta = chunk.message?.content;
           final toolCalls = chunk.message?.toolCalls?.map((tc) {
+            toolCalled = true;
             return LlmToolCall(
               id: '',
               name: tc.function?.name ?? '',
@@ -74,26 +81,26 @@ class OllamaLlmService implements LlmService {
           }
         }
 
-        if (!heuristicTriggered) {
+        // HEURISTIC REPAIR: If the model output a code block but didn't trigger a tool call
+        if (!toolCalled) {
           final codeBlockRegex = RegExp(r'```python\n([\s\S]*?)```');
           final match = codeBlockRegex.firstMatch(fullContent);
 
           if (match != null) {
             final code = match.group(1)?.trim();
             if (code != null && code.isNotEmpty) {
-              _log('Heuristic: Detected python block, triggering run_python');
+              _log('Heuristic: Repairing missing tool call for python block');
               controller.add(
                 LlmResponseChunk(
                   toolCalls: [
                     LlmToolCall(
-                      id: 'heuristic',
+                      id: 'repaired',
                       name: 'run_python',
                       arguments: {'code': code},
                     ),
                   ],
                 ),
               );
-              heuristicTriggered = true;
             }
           }
         }
