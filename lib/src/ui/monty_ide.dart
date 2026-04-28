@@ -189,6 +189,20 @@ class _MontyIdeState extends State<MontyIde> {
     _assistantBufferController.add(code);
   }
 
+  Color _parseColor(String? colorStr, Color defaultColor) {
+    if (colorStr == null) return defaultColor;
+    return switch (colorStr) {
+      'red' => Colors.red,
+      'green' => Colors.green,
+      'blue' => Colors.blue,
+      'teal' => Colors.teal,
+      'orange' => Colors.orange,
+      'purple' => Colors.purple,
+      'amber' => Colors.amber,
+      _ => defaultColor,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -252,22 +266,33 @@ class _MontyIdeState extends State<MontyIde> {
                         ),
                       ),
                     const Spacer(),
-                    ElevatedButton.icon(
-                      onPressed: _controller.isExecuting ? null : _handleRun,
-                      icon: const Icon(Icons.play_arrow, size: 16),
-                      label: const Text(
-                        'RUN',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                    ),
+                    ListenableBuilder(
+                        listenable: _registry,
+                        builder: (context, _) {
+                          final props =
+                              _registry.getProperties('ide_run_button') ?? {};
+                          final color = _parseColor(
+                              props['color'] as String?, Colors.green);
+
+                          return ElevatedButton.icon(
+                            onPressed:
+                                _controller.isExecuting ? null : _handleRun,
+                            icon: const Icon(Icons.play_arrow, size: 16),
+                            label: const Text(
+                              'RUN',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: color,
+                              foregroundColor: Colors.white,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                          );
+                        }),
                     const SizedBox(width: 8),
                     IconButton(
                       onPressed: _currentFilePath == null
@@ -427,7 +452,7 @@ class _MontyIdeState extends State<MontyIde> {
               onCopyToEditor: _handleCopyToEditor,
               onClose: () => setState(() => _showAssistant = false),
               onFileWritten: _handleFileWritten,
-              onAssistantCode: _handleAssistantCode,
+              onAssistantCode: (code) => _assistantBufferController.add(code),
             ),
           ),
         ],

@@ -48,6 +48,7 @@ void main() async {
         'print("🎨 Updating Flutter widgets...")\n'
         'flutter_set_color("box_1", "teal")\n'
         'flutter_set_prop("label_1", "text", "Updated from Monty Python!")\n'
+        'flutter_set_color("ide_run_button", "orange")\n'
         'print("Done.")\n',
   );
 
@@ -76,10 +77,10 @@ Monty enforces static typing. Your code must pass `typeCheck`:
 ## CORE RUNTIME RULES
 1. **Host Functions Return JSON**: ALL host functions return JSON strings. Always `json.loads()` the result.
 2. **Import JSON**: Always `import json` at the top.
-3. **Implicit Return**: The last expression is the return value.
+3. **Implicit Return**: The last expression in the script is the return value.
 4. **Assignment**: Use `=` for assignment, NOT `:=`.
 5. **No open()**: Use `pathlib.Path().read_text()` for file access.
-6. **Dict Access**: Use `d["key"]`, not `d.key`.
+6. **Dict Access**: No dot attribute access on dicts. Use `d["key"]`, not `d.key`.
 7. **Top-Level Code**: Prefer writing top-level code. Do NOT use `if __name__ == "__main__":`.
 
 ## WHAT MONTY SUPPORTS
@@ -125,6 +126,9 @@ print, len, range, type, str, int, float, bool, list, dict, set, tuple, sorted (
 ## IDE TOOLS
 - `run_python(code)`: Execute and see result. MANDATORY for verification.
 - `write_file(path, content)`: Save to sidebar.
+
+## ERROR HANDLING
+Never use bare `except:`. Preserve error info with `except Exception as e:`.
 ''';
 
   final files = await vfs.listFiles();
