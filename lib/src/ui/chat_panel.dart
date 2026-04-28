@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:dart_monty_core/dart_monty_core.dart';
+import 'package:dart_monty_ide/src/assistant/assistant_controller.dart';
+import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
+import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
+import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:dart_monty_ide/src/llm/ollama_service.dart';
@@ -234,7 +237,7 @@ class _ChatPanelState extends State<ChatPanel> {
     try {
       sysPrompt = await widget.vfs.readFile('system_prompt.txt');
     } on Exception catch (e) {
-      sysPrompt = SystemPromptView.defaultPrompt;
+      sysPrompt = defaultAssistantPrompt;
       await _logDebug('Failed to read system_prompt.txt: $e');
     }
 
@@ -309,7 +312,6 @@ class _ChatPanelState extends State<ChatPanel> {
       if (toolCalls.isNotEmpty) {
         await _logDebug('Received ${toolCalls.length} tool calls');
 
-        // Replace the partial streaming message with a structured tool call message
         final assistantToolCallMsg = ChatMessage(
           role: 'assistant',
           content: assistantMsgContent.content,
@@ -383,42 +385,25 @@ class _ChatPanelState extends State<ChatPanel> {
     }
     _scrollToBottom(force: true);
 
+    final toolHandler =
+        IdeToolHandler(vfs: widget.vfs, ideController: widget.controller);
     Object? result;
     try {
       if (call.name == 'type_check') {
-        final code = (call.arguments['code'] as String?) ?? '';
-        final errors = await Monty.typeCheck(code);
-        if (errors.isEmpty) {
-          result = {'ok': true, 'errors': []};
-        } else {
-          result = {
-            'ok': false,
-            'errors': errors
-                .map((e) => {
-                      'line': e.line,
-                      'col': e.column,
-                      'code': e.code,
-                      'message': e.message,
-                    })
-                .toList(),
-          };
-        }
+        result = await toolHandler
+            .typeCheck((call.arguments['code'] as String?) ?? '');
       } else if (call.name == 'run_python') {
-        final code = (call.arguments['code'] as String?) ?? '';
-        widget.onAssistantCode?.call(code);
-        final res = await widget.controller.execute(code);
-        result = {
-          'output': res?.printOutput,
-          'error': res?.error?.message,
-          'value': res?.value.toString(),
-        };
+        widget.onAssistantCode?.call((call.arguments['code'] as String?) ?? '');
+        result = await toolHandler
+            .runPython((call.arguments['code'] as String?) ?? '');
       } else if (call.name == 'write_file') {
-        final path = (call.arguments['path'] as String?) ?? 'untitled.py';
-        final content = (call.arguments['content'] as String?) ?? '';
-        widget.onAssistantCode?.call(content);
-        await widget.vfs.writeFile(path, content);
+        widget.onAssistantCode
+            ?.call((call.arguments['content'] as String?) ?? '');
+        result = await toolHandler.writeFile(
+          (call.arguments['path'] as String?) ?? 'file.py',
+          (call.arguments['content'] as String?) ?? '',
+        );
         widget.onFileWritten?.call();
-        result = {'status': 'success', 'path': path};
       }
     } on Exception catch (e) {
       result = {'error': e.toString()};

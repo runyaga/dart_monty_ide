@@ -1,23 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:dart_monty_core/dart_monty_core.dart';
-import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
+import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
-import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 
 /// Headless controller that manages the AI Assistant's verification loop.
 class AssistantController {
   /// Creates an [AssistantController].
   AssistantController({
-    required this.vfs,
-    required this.ideController,
+    required this.toolHandler,
     required this.llmService,
     required this.config,
     required this.systemPrompt,
   });
 
-  final MontyVfs vfs;
-  final MontyIdeController ideController;
+  final AssistantToolHandler toolHandler;
   final LlmService llmService;
   final LlmConfig config;
   final String systemPrompt;
@@ -100,26 +96,14 @@ class AssistantController {
     try {
       if (call.name == 'type_check') {
         final code = (call.arguments['code'] as String?) ?? '';
-        final errors = await Monty.typeCheck(code);
-        return {
-          'ok': errors.isEmpty,
-          'errors': errors
-              .map((e) => {'line': e.line, 'message': e.message})
-              .toList(),
-        };
+        return await toolHandler.typeCheck(code);
       } else if (call.name == 'run_python') {
         final code = (call.arguments['code'] as String?) ?? '';
-        final res = await ideController.execute(code);
-        return {
-          'output': res?.printOutput,
-          'error': res?.error?.message,
-          'value': res?.value.toString(),
-        };
+        return await toolHandler.runPython(code);
       } else if (call.name == 'write_file') {
         final path = (call.arguments['path'] as String?) ?? 'file.py';
         final content = (call.arguments['content'] as String?) ?? '';
-        await vfs.writeFile(path, content);
-        return {'status': 'success'};
+        return await toolHandler.writeFile(path, content);
       }
     } catch (e) {
       return {'error': e.toString()};
