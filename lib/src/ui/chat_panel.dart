@@ -258,7 +258,8 @@ class _ChatPanelState extends State<ChatPanel> {
       ),
     ];
 
-    await _logDebug('Sending history with ${history.length} messages');
+    await _logDebug(
+        'FULL HISTORY PAYLOAD:\n${const JsonEncoder.withIndent('  ').convert(history)}');
 
     final config = LlmConfig(
       provider: _provider,
@@ -299,12 +300,13 @@ class _ChatPanelState extends State<ChatPanel> {
       if (toolCalls.isNotEmpty) {
         await _logDebug('Received ${toolCalls.length} tool calls');
 
-        // Create a hidden assistant message that actually holds the tool call data for history
+        // Create a hidden assistant message that actually holds the tool call data for history.
+        // CRITICAL FIX: isUiOnly MUST BE FALSE for these to stay in history!
         final assistantToolCallMsg = ChatMessage(
           role: 'assistant',
           content: assistantMsgContent.content,
           toolCalls: toolCalls,
-          isUiOnly: true,
+          isUiOnly: false,
         );
 
         // Replace the "empty" or partial assistant message in history logic
@@ -351,8 +353,8 @@ class _ChatPanelState extends State<ChatPanel> {
     if (mounted) {
       setState(() {
         _lastDebugLog = '$entry\n$_lastDebugLog';
-        if (_lastDebugLog.length > 10000) {
-          _lastDebugLog = _lastDebugLog.substring(0, 10000);
+        if (_lastDebugLog.length > 20000) {
+          _lastDebugLog = _lastDebugLog.substring(0, 20000);
         }
       });
     }
@@ -429,6 +431,7 @@ class _ChatPanelState extends State<ChatPanel> {
           ChatMessage(
             role: 'tool',
             content: jsonEncode(result),
+            isUiOnly: false, // MANDATORY FOR HISTORY
           ),
         );
       });
@@ -570,12 +573,13 @@ class _ChatPanelState extends State<ChatPanel> {
         ),
         if (_showDebug)
           Container(
-            height: 150,
+            height: 250, // Increased size for history inspection
             width: double.infinity,
             color: Colors.black,
             padding: const EdgeInsets.all(8),
             child: SingleChildScrollView(
-              child: Text(
+              child: SelectableText(
+                // Made selectable
                 _lastDebugLog,
                 style: const TextStyle(
                   color: Colors.greenAccent,
@@ -583,34 +587,6 @@ class _ChatPanelState extends State<ChatPanel> {
                   fontFamily: 'monospace',
                 ),
               ),
-            ),
-          ),
-        if (_showSettings)
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: Theme.of(context).cardColor,
-            child: Column(
-              children: [
-                TextField(
-                  controller: _ollamaUrlController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ollama Base URL',
-                    labelStyle: TextStyle(fontSize: 10),
-                    isDense: true,
-                  ),
-                  style: const TextStyle(fontSize: 11),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _modelController,
-                  decoration: const InputDecoration(
-                    labelText: 'Model Name',
-                    labelStyle: TextStyle(fontSize: 10),
-                    isDense: true,
-                  ),
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ],
             ),
           ),
         Expanded(
