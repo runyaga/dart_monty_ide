@@ -86,7 +86,7 @@ class LlmResponseChunk {
 abstract interface class LlmService {
   /// Streams a response from the LLM.
   Stream<LlmResponseChunk> streamResponse({
-    required List<Map<String, String>> messages,
+    required List<Map<String, dynamic>> messages,
     required LlmConfig config,
     List<LlmTool>? tools,
   });

@@ -19,6 +19,7 @@ class ChatMessage {
     required this.role,
     String content = '',
     this.isUiOnly = false,
+    this.toolCalls,
   }) : _content = content {
     // Throttle the UI updates to every 100ms for smoother markdown parsing.
     _throttledStream = _contentController.stream
@@ -30,6 +31,9 @@ class ChatMessage {
 
   /// Whether this message is for UI display only and not sent to the LLM.
   final bool isUiOnly;
+
+  /// Optional list of tool calls if this is an assistant message.
+  final List<LlmToolCall>? toolCalls;
 
   String _content;
 
@@ -230,22 +234,30 @@ class _ChatPanelState extends State<ChatPanel> {
     }
 
     // Filter history to exclude UI-only status messages.
-    // Also ensures we don't send empty content strings if possible.
     final history = [
       {'role': 'system', 'content': sysPrompt},
       ..._messages.where((m) => !m.isUiOnly).map(
         (m) {
-          var content = m.content;
-          // If assistant message is empty (pure tool call), give it a placeholder
-          if (content.isEmpty && m.role == 'assistant') {
-            content = '[Calling tools...]';
+          final map = <String, dynamic>{
+            'role': m.role,
+            'content': m.content,
+          };
+          if (m.toolCalls != null) {
+            map['tool_calls'] = m.toolCalls!
+                .map((tc) => {
+                      'function': {
+                        'name': tc.name,
+                        'arguments': tc.arguments,
+                      }
+                    })
+                .toList();
           }
-          return {'role': m.role, 'content': content};
+          return map;
         },
       ),
     ];
 
-    _logDebug('Sending history: ${jsonEncode(history)}');
+    _logDebug('Sending history with ${history.length} messages');
 
     final config = LlmConfig(
       provider: _provider,
@@ -253,10 +265,10 @@ class _ChatPanelState extends State<ChatPanel> {
       model: _modelController.text.trim(),
     );
 
-    final assistantMsg = ChatMessage(role: 'assistant');
+    final assistantMsgContent = ChatMessage(role: 'assistant');
     if (mounted) {
       setState(() {
-        _messages.add(assistantMsg);
+        _messages.add(assistantMsgContent);
       });
     }
 
@@ -275,7 +287,7 @@ class _ChatPanelState extends State<ChatPanel> {
       await for (final chunk in stream) {
         if (!mounted) break;
         if (chunk.text != null) {
-          assistantMsg.append(chunk.text!);
+          assistantMsgContent.append(chunk.text!);
         }
         if (chunk.toolCalls != null) {
           toolCalls.addAll(chunk.toolCalls!);
@@ -285,13 +297,29 @@ class _ChatPanelState extends State<ChatPanel> {
 
       if (toolCalls.isNotEmpty) {
         _logDebug('Received ${toolCalls.length} tool calls');
+
+        // Create a hidden assistant message that actually holds the tool call data for history
+        final assistantToolCallMsg = ChatMessage(
+          role: 'assistant',
+          content: assistantMsgContent.content,
+          toolCalls: toolCalls,
+          isUiOnly: true,
+        );
+
+        // Replace the "empty" or partial assistant message in history logic
+        if (_messages.isNotEmpty) {
+          _messages.removeLast();
+        }
+        _messages.add(assistantToolCallMsg);
+
         _toolCallCount++;
         for (final call in toolCalls) {
           // DUPLICATE DETECTION: Check if we are repeating the exact same call
           final callSig = '${call.name}:${jsonEncode(call.arguments)}';
           if (_toolCallHistory.contains(callSig)) {
             _logDebug('Loop detected: LLM repeated call $callSig');
-            assistantMsg.append('\n\n⚠️ Loop detected: Stopping execution.');
+            assistantToolCallMsg
+                .append('\n\n⚠️ Loop detected: Stopping execution.');
             if (mounted) setState(() => _isStreaming = false);
             return;
           }
@@ -305,7 +333,7 @@ class _ChatPanelState extends State<ChatPanel> {
     } on Exception catch (e) {
       _logDebug('LLM Error: $e');
       if (mounted) {
-        assistantMsg.append('\n\n**Error:** $e');
+        assistantMsgContent.append('\n\n**Error:** $e');
       }
     } finally {
       if (mounted && toolCalls.isEmpty) {
@@ -330,7 +358,7 @@ class _ChatPanelState extends State<ChatPanel> {
     final toolMsg = ChatMessage(
       role: 'assistant',
       content: '🛠️ Calling tool: ${call.name}...',
-      isUiOnly: true, // DO NOT send this status message back to the LLM
+      isUiOnly: true,
     );
     if (mounted) {
       setState(() {

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:convert';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:ollama_dart/ollama_dart.dart';
 
@@ -12,7 +11,7 @@ class OllamaLlmService implements LlmService {
 
   @override
   Stream<LlmResponseChunk> streamResponse({
-    required List<Map<String, String>> messages,
+    required List<Map<String, dynamic>> messages,
     required LlmConfig config,
     List<LlmTool>? tools,
   }) {
@@ -29,7 +28,24 @@ class OllamaLlmService implements LlmService {
         'tool' => MessageRole.tool,
         _ => MessageRole.user,
       };
-      return ChatMessage(role: role, content: m['content'] ?? '');
+
+      final content = m['content'] as String? ?? '';
+      final toolCallsData = m['tool_calls'] as List<dynamic>?;
+
+      return ChatMessage(
+        role: role,
+        content: content,
+        toolCalls: toolCallsData
+            ?.map((tc) => ToolCall(
+                  function: ToolCallFunction(
+                    name: tc['function']['name'] as String? ?? '',
+                    arguments:
+                        tc['function']['arguments'] as Map<String, dynamic>? ??
+                            {},
+                  ),
+                ))
+            .toList(),
+      );
     }).toList();
 
     final ollamaTools = tools?.map((t) {
@@ -55,7 +71,8 @@ class OllamaLlmService implements LlmService {
       ),
     );
 
-    _log('REQUEST MESSAGES: ${jsonEncode(messages)}');
+    _log(
+        'Requesting turn with roles: ${messages.map((m) => m['role']).toList()}');
 
     unawaited(() async {
       var fullContent = '';
@@ -67,20 +84,16 @@ class OllamaLlmService implements LlmService {
           final delta = chunk.message?.content;
           final toolCalls = chunk.message?.toolCalls?.map((tc) {
             toolCalled = true;
-            // Generate a random ID if missing, some libraries require it to match response
-            final id = 'call_${DateTime.now().millisecondsSinceEpoch}';
-            _log(
-                'LLM requested tool: ${tc.function?.name} with args: ${tc.function?.arguments}');
+            final name = tc.function?.name ?? '';
+            _log('LLM requested tool: $name');
             return LlmToolCall(
-              id: id,
-              name: tc.function?.name ?? '',
+              id: '', // Positional, no ID support in ollama_dart
+              name: name,
               arguments: tc.function?.arguments ?? {},
             );
           }).toList();
 
-          if (delta != null) {
-            fullContent += delta;
-          }
+          if (delta != null) fullContent += delta;
 
           if ((delta != null && delta.isNotEmpty) ||
               (toolCalls != null && toolCalls.isNotEmpty)) {
@@ -101,7 +114,7 @@ class OllamaLlmService implements LlmService {
                 LlmResponseChunk(
                   toolCalls: [
                     LlmToolCall(
-                      id: 'repaired_${DateTime.now().millisecondsSinceEpoch}',
+                      id: '',
                       name: 'type_check',
                       arguments: {'code': code},
                     ),
@@ -112,7 +125,7 @@ class OllamaLlmService implements LlmService {
           }
         }
       } on Exception catch (e) {
-        _log('ERROR in stream: $e');
+        _log('ERROR: $e');
         controller.addError(e);
       } finally {
         await controller.close();
