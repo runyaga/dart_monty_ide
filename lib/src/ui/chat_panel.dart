@@ -99,6 +99,8 @@ class _ChatPanelState extends State<ChatPanel> {
   LlmProvider _provider = LlmProvider.ollama;
   bool _isStreaming = false;
   bool _showSettings = false;
+  bool _showDebug = false;
+  String _lastDebugLog = '';
 
   late LlmService _ollamaService;
   late LlmService _openResponsesService;
@@ -184,10 +186,8 @@ class _ChatPanelState extends State<ChatPanel> {
     try {
       sysPrompt = await widget.vfs.readFile('system_prompt.txt');
     } on Exception catch (e) {
-      debugPrint(
-        'ChatPanel: Failed to read system_prompt.txt, using fallback: $e',
-      );
       sysPrompt = SystemPromptView.defaultPrompt;
+      _logDebug('Failed to read system_prompt.txt: $e');
     }
 
     final history = [
@@ -208,6 +208,11 @@ class _ChatPanelState extends State<ChatPanel> {
       });
     }
 
+    _logDebug(
+      'Sending request to LLM with ${history.length} messages '
+      'and ${_tools.length} tools.',
+    );
+
     try {
       final stream = _currentService.streamResponse(
         messages: history,
@@ -224,17 +229,24 @@ class _ChatPanelState extends State<ChatPanel> {
         }
         if (chunk.toolCalls != null) {
           toolCalls.addAll(chunk.toolCalls!);
+          _logDebug(
+            'Chunk received with ${chunk.toolCalls?.length} tool calls.',
+          );
         }
         _scrollToBottom();
       }
 
       if (toolCalls.isNotEmpty) {
+        _logDebug('Handling ${toolCalls.length} tool calls.');
         for (final call in toolCalls) {
           await _handleToolCall(call);
         }
         if (mounted) await _getLlmResponse();
+      } else {
+        _logDebug('Stream finished with NO tool calls.');
       }
     } on Exception catch (e) {
+      _logDebug('LLM Error: $e');
       if (mounted) {
         assistantMsg.append('\n\n**Error:** $e');
       }
@@ -243,6 +255,17 @@ class _ChatPanelState extends State<ChatPanel> {
         setState(() => _isStreaming = false);
       }
     }
+  }
+
+  void _logDebug(String text) {
+    if (!mounted) return;
+    setState(() {
+      _lastDebugLog =
+          '${DateTime.now().toIso8601String()}: $text\n$_lastDebugLog';
+      if (_lastDebugLog.length > 5000) {
+        _lastDebugLog = _lastDebugLog.substring(0, 5000);
+      }
+    });
   }
 
   Future<void> _handleToolCall(LlmToolCall call) async {
@@ -310,6 +333,7 @@ class _ChatPanelState extends State<ChatPanel> {
         m.dispose();
       }
       _messages.clear();
+      _lastDebugLog = '';
     });
   }
 
@@ -327,6 +351,18 @@ class _ChatPanelState extends State<ChatPanel> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               ),
               const Spacer(),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => setState(() => _showDebug = !_showDebug),
+                icon: Icon(
+                  Icons.bug_report,
+                  size: 14,
+                  color: _showDebug ? Colors.red : null,
+                ),
+                tooltip: 'Show Debug Logs',
+              ),
+              const SizedBox(width: 8),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -373,6 +409,23 @@ class _ChatPanelState extends State<ChatPanel> {
             ],
           ),
         ),
+        if (_showDebug)
+          Container(
+            height: 150,
+            width: double.infinity,
+            color: Colors.black,
+            padding: const EdgeInsets.all(8),
+            child: SingleChildScrollView(
+              child: Text(
+                _lastDebugLog,
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          ),
         if (_showSettings)
           Container(
             padding: const EdgeInsets.all(12),

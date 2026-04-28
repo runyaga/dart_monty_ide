@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:ollama_dart/ollama_dart.dart';
 
 /// Implementation of [LlmService] using the Ollama local API.
 class OllamaLlmService implements LlmService {
+  void _log(String text) {
+    stderr.writeln('OLLAMA: $text');
+  }
+
   @override
   Stream<LlmResponseChunk> streamResponse({
     required List<Map<String, String>> messages,
@@ -43,7 +48,12 @@ class OllamaLlmService implements LlmService {
       tools: ollamaTools,
     );
 
+    _log('Requesting ${config.model}');
+
     unawaited(() async {
+      var fullContent = '';
+      var heuristicTriggered = false;
+
       try {
         final stream = client.chat.createStream(request: request);
         await for (final chunk in stream) {
@@ -56,12 +66,39 @@ class OllamaLlmService implements LlmService {
             );
           }).toList();
 
+          if (delta != null) fullContent += delta;
+
           if ((delta != null && delta.isNotEmpty) ||
               (toolCalls != null && toolCalls.isNotEmpty)) {
             controller.add(LlmResponseChunk(text: delta, toolCalls: toolCalls));
           }
         }
+
+        if (!heuristicTriggered) {
+          final codeBlockRegex = RegExp(r'```python\n([\s\S]*?)```');
+          final match = codeBlockRegex.firstMatch(fullContent);
+
+          if (match != null) {
+            final code = match.group(1)?.trim();
+            if (code != null && code.isNotEmpty) {
+              _log('Heuristic: Detected python block, triggering run_python');
+              controller.add(
+                LlmResponseChunk(
+                  toolCalls: [
+                    LlmToolCall(
+                      id: 'heuristic',
+                      name: 'run_python',
+                      arguments: {'code': code},
+                    ),
+                  ],
+                ),
+              );
+              heuristicTriggered = true;
+            }
+          }
+        }
       } on Exception catch (e) {
+        _log('Error: $e');
         controller.addError(e);
       } finally {
         await controller.close();
@@ -74,6 +111,6 @@ class OllamaLlmService implements LlmService {
 
   @override
   void dispose() {
-    // No-op for now.
+    // No-op.
   }
 }
