@@ -82,17 +82,30 @@ class MontyEditorState extends State<MontyEditor> {
     });
   }
 
+  void _closeFind() {
+    if (_showFind) {
+      setState(() {
+        _showFind = false;
+        _findController.close();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
       shortcuts: <ShortcutActivator, Intent>{
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
             const _FindIntent(),
+        const SingleActivator(LogicalKeyboardKey.escape): const _CancelIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
           _FindIntent: CallbackAction<_FindIntent>(
             onInvoke: (_) => toggleFind(),
+          ),
+          _CancelIntent: CallbackAction<_CancelIntent>(
+            onInvoke: (_) => _closeFind(),
           ),
         },
         child: Column(
@@ -175,6 +188,10 @@ class MontyEditorState extends State<MontyEditor> {
 
 class _FindIntent extends Intent {
   const _FindIntent();
+}
+
+class _CancelIntent extends Intent {
+  const _CancelIntent();
 }
 
 class _EmptyPreferredSize extends StatelessWidget
