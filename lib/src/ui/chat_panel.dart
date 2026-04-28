@@ -33,6 +33,7 @@ class ChatPanel extends StatefulWidget {
     required this.controller,
     required this.onCopyToEditor,
     required this.onClose,
+    this.onFileWritten,
     super.key,
   });
 
@@ -47,6 +48,9 @@ class ChatPanel extends StatefulWidget {
 
   /// Callback when the panel should be closed.
   final VoidCallback onClose;
+
+  /// Callback when a file is written by a tool.
+  final VoidCallback? onFileWritten;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -238,6 +242,7 @@ class _ChatPanelState extends State<ChatPanel> {
         final path = (call.arguments['path'] as String?) ?? 'untitled.py';
         final content = (call.arguments['content'] as String?) ?? '';
         await widget.vfs.writeFile(path, content);
+        widget.onFileWritten?.call();
         result = {'status': 'success', 'path': path};
       }
     } on Exception catch (e) {

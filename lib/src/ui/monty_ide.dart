@@ -48,6 +48,8 @@ class _MontyIdeState extends State<MontyIde> {
   double _assistantWidth = 350;
   double _externalsWidth = 250;
 
+  int _fileExplorerVersion = 0;
+
   final StreamController<String> _consoleStreamController =
       StreamController<String>.broadcast();
 
@@ -166,11 +168,18 @@ class _MontyIdeState extends State<MontyIde> {
     }
   }
 
+  void _handleFileWritten() {
+    setState(() {
+      _fileExplorerVersion++;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         FileExplorer(
+          key: ValueKey('explorer_$_fileExplorerVersion'),
           vfs: widget.vfs,
           onFileSelected: (path) => unawaited(_loadFile(path)),
         ),
@@ -390,6 +399,7 @@ class _MontyIdeState extends State<MontyIde> {
               controller: _controller,
               onCopyToEditor: _handleCopyToEditor,
               onClose: () => setState(() => _showAssistant = false),
+              onFileWritten: _handleFileWritten,
             ),
           ),
         ],
