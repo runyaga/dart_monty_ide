@@ -1,5 +1,6 @@
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/python.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
@@ -33,9 +34,13 @@ class MontyEditor extends StatefulWidget {
 }
 
 class _MontyEditorState extends State<MontyEditor> {
+  late final CodeFindController _findController;
+  bool _showFind = false;
+
   @override
   void initState() {
     super.initState();
+    _findController = CodeFindController(widget.controller);
     widget.ideController?.addListener(_onIdeStateChanged);
   }
 
@@ -51,6 +56,7 @@ class _MontyEditorState extends State<MontyEditor> {
   @override
   void dispose() {
     widget.ideController?.removeListener(_onIdeStateChanged);
+    _findController.dispose();
     super.dispose();
   }
 
@@ -62,66 +68,168 @@ class _MontyEditorState extends State<MontyEditor> {
     }
   }
 
+  void _toggleFind() {
+    setState(() {
+      _showFind = !_showFind;
+      if (_showFind) {
+        _findController.focusOnFindInput();
+      } else {
+        _findController.close();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: CodeEditor(
-            controller: widget.controller,
-            wordWrap: false,
-            autocompleteSymbols: false,
-            style: CodeEditorStyle(
-              fontSize: 14,
-              codeTheme: CodeHighlightTheme(
-                languages: {
-                  'python': CodeHighlightThemeMode(mode: langPython),
-                },
-                theme: atomOneDarkTheme,
-              ),
-            ),
-            indicatorBuilder:
-                (context, editingController, chunkController, notifier) {
-              return Row(
-                children: [
-                  DefaultCodeLineNumber(
-                    controller: editingController,
-                    notifier: notifier,
-                  ),
-                  _ErrorIndicator(
-                    notifier: notifier,
-                    errorLine: widget.ideController?.lastErrorLine,
-                  ),
-                  DefaultCodeChunkIndicator(
-                    width: 20,
-                    controller: chunkController,
-                    notifier: notifier,
-                  ),
-                ],
-              );
-            },
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+            const _FindIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _FindIntent: CallbackAction<_FindIntent>(
+            onInvoke: (_) => _toggleFind(),
           ),
-        ),
-        if (widget.showRunButton)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Theme.of(context).cardColor,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: widget.onRun,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Run'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+        },
+        child: Column(
+          children: [
+            if (_showFind)
+              _MontyFindWidget(
+                controller: _findController,
+                onClose: () {
+                  setState(() {
+                    _showFind = false;
+                    _findController.close();
+                  });
+                },
+              ),
+            Expanded(
+              child: CodeEditor(
+                controller: widget.controller,
+                findController: _findController,
+                wordWrap: false,
+                autocompleteSymbols: false,
+                style: CodeEditorStyle(
+                  fontSize: 14,
+                  codeTheme: CodeHighlightTheme(
+                    languages: {
+                      'python': CodeHighlightThemeMode(mode: langPython),
+                    },
+                    theme: atomOneDarkTheme,
                   ),
                 ),
-              ],
+                indicatorBuilder:
+                    (context, editingController, chunkController, notifier) {
+                  return Row(
+                    children: [
+                      DefaultCodeLineNumber(
+                        controller: editingController,
+                        notifier: notifier,
+                      ),
+                      _ErrorIndicator(
+                        notifier: notifier,
+                        errorLine: widget.ideController?.lastErrorLine,
+                      ),
+                      DefaultCodeChunkIndicator(
+                        width: 20,
+                        controller: chunkController,
+                        notifier: notifier,
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-      ],
+            if (widget.showRunButton)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Theme.of(context).cardColor,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: widget.onRun,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Run'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FindIntent extends Intent {
+  const _FindIntent();
+}
+
+class _MontyFindWidget extends StatelessWidget {
+  const _MontyFindWidget({
+    required this.controller,
+    required this.onClose,
+  });
+
+  final CodeFindController controller;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      color: Theme.of(context).cardColor,
+      child: ValueListenableBuilder<CodeFindValue?>(
+        valueListenable: controller,
+        builder: (context, value, child) {
+          final result = value?.result;
+          final matches = result?.matches ?? [];
+          final current = (result?.index ?? -1) + 1;
+          final total = matches.length;
+
+          return Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller.findInputController,
+                  decoration: const InputDecoration(
+                    hintText: 'Find',
+                    isDense: true,
+                    contentPadding: EdgeInsets.all(8),
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: true,
+                  onSubmitted: (_) => controller.nextMatch(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$current / $total',
+                style: const TextStyle(fontSize: 12),
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_upward, size: 18),
+                onPressed: total > 0 ? controller.previousMatch : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_downward, size: 18),
+                onPressed: total > 0 ? controller.nextMatch : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: onClose,
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -143,9 +251,6 @@ class _ErrorIndicator extends StatelessWidget {
         if (value == null || errorLine == null) {
           return const SizedBox(width: 20);
         }
-        // Monty error line numbers are 1-based.
-        // paragraphs[0] is not necessarily line 0, but it has an index.
-        // We need to see if any visible paragraph has the error index.
         final targetIndex = errorLine! - 1;
 
         return Container(
