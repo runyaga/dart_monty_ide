@@ -18,9 +18,9 @@ class ChatMessage {
     required this.role,
     String content = '',
   }) : _content = content {
-    // Throttle the UI updates to every 50ms to prevent Markdown re-parse lag.
+    // Throttle the UI updates to every 100ms for smoother markdown parsing.
     _throttledStream = _contentController.stream
-        .throttleTime(const Duration(milliseconds: 50));
+        .throttleTime(const Duration(milliseconds: 100), trailing: true);
   }
 
   /// Role of the message sender.
@@ -177,7 +177,7 @@ class _ChatPanelState extends State<ChatPanel> {
       });
     }
 
-    _scrollToBottom();
+    _scrollToBottom(force: true);
     await _getLlmResponse();
   }
 
@@ -278,7 +278,7 @@ class _ChatPanelState extends State<ChatPanel> {
         _messages.add(toolMsg);
       });
     }
-    _scrollToBottom();
+    _scrollToBottom(force: true);
 
     Object? result;
     try {
@@ -312,19 +312,31 @@ class _ChatPanelState extends State<ChatPanel> {
           ),
         );
       });
-      _scrollToBottom();
+      _scrollToBottom(force: true);
     }
   }
 
-  void _scrollToBottom() {
+  DateTime _lastScroll = DateTime.now();
+  void _scrollToBottom({bool force = false}) {
     if (!_scrollController.hasClients) return;
-    unawaited(
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      ),
-    );
+
+    // Throttle scroll events to 100ms
+    final now = DateTime.now();
+    if (!force && now.difference(_lastScroll).inMilliseconds < 100) return;
+    _lastScroll = now;
+
+    // Use jumpTo for streaming performance, animateTo only for discrete events
+    if (force) {
+      unawaited(
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        ),
+      );
+    } else {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
   }
 
   void _clearChat() {
@@ -459,6 +471,7 @@ class _ChatPanelState extends State<ChatPanel> {
             controller: _scrollController,
             padding: const EdgeInsets.all(16),
             itemCount: _messages.length,
+            cacheExtent: 1000, // Pre-render to reduce layout lag
             itemBuilder: (context, index) {
               final msg = _messages[index];
               if (msg.role == 'tool') return const SizedBox.shrink();
@@ -466,6 +479,7 @@ class _ChatPanelState extends State<ChatPanel> {
               return _ChatMessageWidget(
                 key: ValueKey(msg),
                 message: msg,
+                isStreaming: _isStreaming && index == _messages.length - 1,
                 onCopyToEditor: widget.onCopyToEditor,
               );
             },
@@ -519,11 +533,13 @@ class _ChatMessageWidget extends StatefulWidget {
   const _ChatMessageWidget({
     required this.message,
     required this.onCopyToEditor,
+    this.isStreaming = false,
     super.key,
   });
 
   final ChatMessage message;
   final ValueChanged<String> onCopyToEditor;
+  final bool isStreaming;
 
   @override
   State<_ChatMessageWidget> createState() => _ChatMessageWidgetState();
@@ -556,9 +572,10 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget>
             stream: widget.message.contentStream,
             initialData: widget.message.content,
             builder: (context, snapshot) {
+              // Disable selection during streaming to speed up MarkdownBody
               return MarkdownBody(
                 data: snapshot.data ?? '',
-                selectable: true,
+                selectable: !widget.isStreaming,
                 builders: {
                   'code': _CodeBlockBuilder(onCopy: widget.onCopyToEditor),
                 },
