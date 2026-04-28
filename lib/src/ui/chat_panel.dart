@@ -9,6 +9,7 @@ import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:rxdart/rxdart.dart';
 
 /// A message in the chat.
 class ChatMessage {
@@ -16,7 +17,11 @@ class ChatMessage {
   ChatMessage({
     required this.role,
     String content = '',
-  }) : _content = content;
+  }) : _content = content {
+    // Throttle the UI updates to every 50ms to prevent Markdown re-parse lag.
+    _throttledStream = _contentController.stream
+        .throttleTime(const Duration(milliseconds: 50));
+  }
 
   /// Role of the message sender.
   final String role;
@@ -29,8 +34,10 @@ class ChatMessage {
   final StreamController<String> _contentController =
       StreamController<String>.broadcast();
 
-  /// Stream of content updates.
-  Stream<String> get contentStream => _contentController.stream;
+  late final Stream<String> _throttledStream;
+
+  /// Stream of content updates (throttled for performance).
+  Stream<String> get contentStream => _throttledStream;
 
   /// Appends text to the message and notifies listeners.
   void append(String text) {
