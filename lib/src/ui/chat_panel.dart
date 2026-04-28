@@ -58,9 +58,9 @@ class _ChatPanelState extends State<ChatPanel> {
   final ScrollController _scrollController = ScrollController();
 
   final TextEditingController _ollamaUrlController =
-      TextEditingController(text: 'http://localhost:11434/api');
+      TextEditingController(text: 'http://localhost:11434');
   final TextEditingController _modelController =
-      TextEditingController(text: 'gpt-oss:latest');
+      TextEditingController(text: 'gpt-oss:20b');
 
   LlmProvider _provider = LlmProvider.ollama;
   bool _isStreaming = false;
