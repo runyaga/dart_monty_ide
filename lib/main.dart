@@ -128,7 +128,15 @@ print, len, range, type, str, int, float, bool, list, dict, set, tuple, sorted (
 ''';
 
   final files = await vfs.listFiles();
-  if (!files.contains('system_prompt.txt')) {
+  bool shouldUpdate = !files.contains('system_prompt.txt');
+  if (!shouldUpdate) {
+    final current = await vfs.readFile('system_prompt.txt');
+    if (current.trim() != defaultPrompt.trim()) {
+      shouldUpdate = true;
+    }
+  }
+
+  if (shouldUpdate) {
     await vfs.writeFile('system_prompt.txt', defaultPrompt);
   }
 
