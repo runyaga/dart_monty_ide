@@ -18,6 +18,7 @@ class ChatMessage {
   ChatMessage({
     required this.role,
     String content = '',
+    this.isUiOnly = false,
   }) : _content = content {
     // Throttle the UI updates to every 100ms for smoother markdown parsing.
     _throttledStream = _contentController.stream
@@ -26,6 +27,9 @@ class ChatMessage {
 
   /// Role of the message sender.
   final String role;
+
+  /// Whether this message is for UI display only and not sent to the LLM.
+  final bool isUiOnly;
 
   String _content;
 
@@ -206,16 +210,13 @@ class _ChatPanelState extends State<ChatPanel> {
   Future<void> _getLlmResponse() async {
     // Check if we hit the turn limit to prevent infinite loops
     if (_toolCallCount >= 10) {
-      // Increased limit to account for type_check + run_python sequence
       _logDebug('Turn limit reached. Stopping tool chain.');
       if (mounted) {
-        setState(() {
-          _isStreaming = false;
-          _messages.add(ChatMessage(
-            role: 'assistant',
-            content: '⚠️ Stopping: Verification turn limit (10) reached.',
-          ));
-        });
+        setState(() => _isStreaming = false);
+        _messages.add(ChatMessage(
+          role: 'assistant',
+          content: '⚠️ Stopping: Verification turn limit (10) reached.',
+        ));
       }
       return;
     }
@@ -228,9 +229,12 @@ class _ChatPanelState extends State<ChatPanel> {
       _logDebug('Failed to read system_prompt.txt: $e');
     }
 
+    // Filter history to exclude UI-only status messages
     final history = [
       {'role': 'system', 'content': sysPrompt},
-      ..._messages.map((m) => {'role': m.role, 'content': m.content}),
+      ..._messages.where((m) => !m.isUiOnly).map(
+            (m) => {'role': m.role, 'content': m.content},
+          ),
     ];
 
     final config = LlmConfig(
@@ -313,6 +317,7 @@ class _ChatPanelState extends State<ChatPanel> {
     final toolMsg = ChatMessage(
       role: 'assistant',
       content: '🛠️ Calling tool: ${call.name}...',
+      isUiOnly: true, // DO NOT send this status message back to the LLM
     );
     if (mounted) {
       setState(() {
