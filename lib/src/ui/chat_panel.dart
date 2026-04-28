@@ -102,6 +102,10 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _showDebug = false;
   String _lastDebugLog = '';
 
+  // RECURSION SAFETY: Track tool call count and history to prevent loops.
+  int _toolCallCount = 0;
+  final Set<String> _toolCallHistory = {};
+
   late LlmService _ollamaService;
   late LlmService _openResponsesService;
 
@@ -174,6 +178,8 @@ class _ChatPanelState extends State<ChatPanel> {
       setState(() {
         _messages.add(ChatMessage(role: 'user', content: prompt));
         _isStreaming = true;
+        _toolCallCount = 0; // Reset safety counters
+        _toolCallHistory.clear();
       });
     }
 
@@ -182,6 +188,21 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   Future<void> _getLlmResponse() async {
+    // Check if we hit the turn limit to prevent infinite loops
+    if (_toolCallCount >= 5) {
+      _logDebug('Turn limit reached. Stopping tool chain.');
+      if (mounted) {
+        setState(() => _isStreaming = false);
+        setState(() {
+          _messages.add(ChatMessage(
+            role: 'assistant',
+            content: '⚠️ Stopping: Verification turn limit (5) reached.',
+          ));
+        });
+      }
+      return;
+    }
+
     String sysPrompt;
     try {
       sysPrompt = await widget.vfs.readFile('system_prompt.txt');
@@ -209,18 +230,16 @@ class _ChatPanelState extends State<ChatPanel> {
     }
 
     _logDebug(
-      'Sending request to LLM with ${history.length} messages '
-      'and ${_tools.length} tools.',
+      'Turn ${_toolCallCount + 1}: Requesting response from ${config.model}',
     );
 
+    final toolCalls = <LlmToolCall>[];
     try {
       final stream = _currentService.streamResponse(
         messages: history,
         config: config,
         tools: _tools,
       );
-
-      final toolCalls = <LlmToolCall>[];
 
       await for (final chunk in stream) {
         if (!mounted) break;
@@ -229,21 +248,25 @@ class _ChatPanelState extends State<ChatPanel> {
         }
         if (chunk.toolCalls != null) {
           toolCalls.addAll(chunk.toolCalls!);
-          _logDebug(
-            'Chunk received with ${chunk.toolCalls?.length} tool calls.',
-          );
         }
         _scrollToBottom();
       }
 
       if (toolCalls.isNotEmpty) {
-        _logDebug('Handling ${toolCalls.length} tool calls.');
+        _toolCallCount++;
         for (final call in toolCalls) {
+          // DUPLICATE DETECTION: Check if we are repeating the exact same call
+          final callSig = '${call.name}:${jsonEncode(call.arguments)}';
+          if (_toolCallHistory.contains(callSig)) {
+            _logDebug('Loop detected: LLM repeated call $callSig');
+            assistantMsg.append('\n\n⚠️ Loop detected: Stopping execution.');
+            if (mounted) setState(() => _isStreaming = false);
+            return;
+          }
+          _toolCallHistory.add(callSig);
           await _handleToolCall(call);
         }
         if (mounted) await _getLlmResponse();
-      } else {
-        _logDebug('Stream finished with NO tool calls.');
       }
     } on Exception catch (e) {
       _logDebug('LLM Error: $e');
@@ -251,7 +274,8 @@ class _ChatPanelState extends State<ChatPanel> {
         assistantMsg.append('\n\n**Error:** $e');
       }
     } finally {
-      if (mounted) {
+      if (mounted && toolCalls.isEmpty) {
+        // Final response received
         setState(() => _isStreaming = false);
       }
     }
