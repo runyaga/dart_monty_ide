@@ -123,6 +123,7 @@ class _ChatPanelState extends State<ChatPanel> {
     super.initState();
     _ollamaService = OllamaLlmService();
     _openResponsesService = OpenResponsesLlmService();
+    unawaited(_logDebug('Chat initialized.'));
   }
 
   @override
@@ -214,7 +215,7 @@ class _ChatPanelState extends State<ChatPanel> {
   Future<void> _getLlmResponse() async {
     // Check if we hit the turn limit to prevent infinite loops
     if (_toolCallCount >= 10) {
-      _logDebug('Turn limit reached. Stopping tool chain.');
+      await _logDebug('Turn limit reached. Stopping tool chain.');
       if (mounted) {
         setState(() => _isStreaming = false);
         _messages.add(ChatMessage(
@@ -230,7 +231,7 @@ class _ChatPanelState extends State<ChatPanel> {
       sysPrompt = await widget.vfs.readFile('system_prompt.txt');
     } on Exception catch (e) {
       sysPrompt = SystemPromptView.defaultPrompt;
-      _logDebug('Failed to read system_prompt.txt: $e');
+      await _logDebug('Failed to read system_prompt.txt: $e');
     }
 
     // Filter history to exclude UI-only status messages.
@@ -257,7 +258,7 @@ class _ChatPanelState extends State<ChatPanel> {
       ),
     ];
 
-    _logDebug('Sending history with ${history.length} messages');
+    await _logDebug('Sending history with ${history.length} messages');
 
     final config = LlmConfig(
       provider: _provider,
@@ -272,7 +273,7 @@ class _ChatPanelState extends State<ChatPanel> {
       });
     }
 
-    _logDebug(
+    await _logDebug(
       'Turn ${_toolCallCount + 1}: Requesting response from ${config.model}',
     );
 
@@ -296,7 +297,7 @@ class _ChatPanelState extends State<ChatPanel> {
       }
 
       if (toolCalls.isNotEmpty) {
-        _logDebug('Received ${toolCalls.length} tool calls');
+        await _logDebug('Received ${toolCalls.length} tool calls');
 
         // Create a hidden assistant message that actually holds the tool call data for history
         final assistantToolCallMsg = ChatMessage(
@@ -317,7 +318,7 @@ class _ChatPanelState extends State<ChatPanel> {
           // DUPLICATE DETECTION: Check if we are repeating the exact same call
           final callSig = '${call.name}:${jsonEncode(call.arguments)}';
           if (_toolCallHistory.contains(callSig)) {
-            _logDebug('Loop detected: LLM repeated call $callSig');
+            await _logDebug('Loop detected: LLM repeated call $callSig');
             assistantToolCallMsg
                 .append('\n\n⚠️ Loop detected: Stopping execution.');
             if (mounted) setState(() => _isStreaming = false);
@@ -328,10 +329,10 @@ class _ChatPanelState extends State<ChatPanel> {
         }
         if (mounted) await _getLlmResponse();
       } else {
-        _logDebug('No tool calls received, sequence finished.');
+        await _logDebug('No tool calls received, sequence finished.');
       }
     } on Exception catch (e) {
-      _logDebug('LLM Error: $e');
+      await _logDebug('LLM Error: $e');
       if (mounted) {
         assistantMsgContent.append('\n\n**Error:** $e');
       }
@@ -343,15 +344,27 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
-  void _logDebug(String text) {
-    if (!mounted) return;
-    setState(() {
-      _lastDebugLog =
-          '${DateTime.now().toIso8601String()}: $text\n$_lastDebugLog';
-      if (_lastDebugLog.length > 10000) {
-        _lastDebugLog = _lastDebugLog.substring(0, 10000);
-      }
-    });
+  Future<void> _logDebug(String text) async {
+    final entry = '${DateTime.now().toIso8601String()}: $text';
+
+    // Update UI Log
+    if (mounted) {
+      setState(() {
+        _lastDebugLog = '$entry\n$_lastDebugLog';
+        if (_lastDebugLog.length > 10000) {
+          _lastDebugLog = _lastDebugLog.substring(0, 10000);
+        }
+      });
+    }
+
+    // Write to Disk Log for CLI access
+    try {
+      String current = '';
+      try {
+        current = await widget.vfs.readFile('assistant_debug.log');
+      } catch (_) {}
+      await widget.vfs.writeFile('assistant_debug.log', '$current$entry\n');
+    } catch (_) {}
   }
 
   Future<void> _handleToolCall(LlmToolCall call) async {
@@ -408,7 +421,7 @@ class _ChatPanelState extends State<ChatPanel> {
       result = {'error': e.toString()};
     }
 
-    _logDebug('Tool result for ${call.name}: ${jsonEncode(result)}');
+    await _logDebug('Tool result for ${call.name}: ${jsonEncode(result)}');
 
     if (mounted) {
       setState(() {
@@ -454,6 +467,8 @@ class _ChatPanelState extends State<ChatPanel> {
       _messages.clear();
       _lastDebugLog = '';
     });
+    unawaited(
+        widget.vfs.writeFile('assistant_debug.log', '--- Chat Cleared ---\n'));
   }
 
   void _viewSystemPrompt() {
