@@ -198,8 +198,8 @@ class MontyIdeController extends ChangeNotifier {
         final handle = await runtime.execute(normalized);
         await handle.result; // Wait for parse/exec
         await runtime.dispose();
+        } on MontySyntaxError catch (e) {
 
-      } on MontySyntaxError catch (e) {
         var msg = '❌ [SyntaxError] ${e.message}';
         final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
         if (byteMatch != null) {

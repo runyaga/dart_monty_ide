@@ -173,26 +173,29 @@ class _ChatPanelState extends State<ChatPanel> {
       await _logDebug('Failed to read system_prompt.txt: $e');
     }
 
+    final config = LlmConfig(
+      provider: _provider,
+      baseUrl: _ollamaUrlController.text.trim(),
+      model: _modelController.text.trim(),
+      temperature: _temperature,
+    );
+
     final toolHandler =
         IdeToolHandler(vfs: widget.vfs, ideController: widget.controller);
     final assistant = AssistantController(
       toolHandler: toolHandler,
       llmService: _currentService,
-      config: LlmConfig(
-        provider: _provider,
-        baseUrl: _ollamaUrlController.text.trim(),
-        model: _modelController.text.trim(),
-        temperature: _temperature,
-      ),
+      config: config,
       systemPrompt: sysPrompt,
     );
 
     final StreamSubscription<AssistantEvent> subscription =
-        assistant.events.listen((AssistantEvent event) {
+        assistant.events.listen((event) {
       if (!mounted) return;
       setState(() {
         if (event is AssistantTextEvent) {
-          // If the last message isn't an assistant message or is UI-only, start a new one.
+          // If the last message isn't an assistant message or is UI-only,
+          // start a new one.
           if (_messages.isEmpty ||
               _messages.last.role != 'assistant' ||
               _messages.last.isUiOnly) {
@@ -234,16 +237,22 @@ class _ChatPanelState extends State<ChatPanel> {
       _scrollToBottom();
     });
 
+
     try {
       await assistant.processPrompt(prompt);
     } on Exception catch (e) {
-      await _logDebug('Assistant Error: $e');
+      unawaited(_logDebug('Assistant Error: $e'));
       if (mounted) {
         setState(() {
           if (_messages.isNotEmpty && _messages.last.role == 'assistant') {
             _messages.last.append('\n\n**Error:** $e');
           } else {
-            _messages.add(ChatMessage(role: 'assistant', content: '**Error:** $e'));
+            _messages.add(
+              ChatMessage(
+                role: 'assistant',
+                content: '**Error:** $e',
+              ),
+            );
           }
         });
       }
@@ -384,7 +393,10 @@ class _ChatPanelState extends State<ChatPanel> {
                   value: _provider,
                   isDense: true,
                   underline: const SizedBox(),
-                  style: const TextStyle(fontSize: 11, color: Colors.black),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.black,
+                  ),
                   items: LlmProvider.values.map((p) {
                     return DropdownMenuItem(
                       value: p,
@@ -395,6 +407,7 @@ class _ChatPanelState extends State<ChatPanel> {
                     if (v != null) setState(() => _provider = v);
                   },
                 ),
+
                 const SizedBox(width: 8),
                 IconButton(
                   padding: EdgeInsets.zero,
@@ -426,15 +439,16 @@ class _ChatPanelState extends State<ChatPanel> {
                         onChanged: (v) => setState(() => _temperature = v),
                       ),
                     ),
-                    Text(_temperature.toStringAsFixed(1),
-                        style: const TextStyle(fontSize: 10)),
+                    Text(
+                      _temperature.toStringAsFixed(1),
+                      style: const TextStyle(fontSize: 10),
+                    ),
                   ],
                 ),
                 TextField(
                   controller: _ollamaUrlController,
                   decoration: const InputDecoration(
                     labelText: 'Ollama Base URL',
-                    isDense: true,
                     labelStyle: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -442,7 +456,6 @@ class _ChatPanelState extends State<ChatPanel> {
                   controller: _modelController,
                   decoration: const InputDecoration(
                     labelText: 'Model Name',
-                    isDense: true,
                     labelStyle: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -500,7 +513,6 @@ class _ChatPanelState extends State<ChatPanel> {
                   decoration: const InputDecoration(
                     hintText: 'Ask the Monty Assistant...',
                     border: InputBorder.none,
-                    isDense: true,
                   ),
                   onSubmitted: (_) {
                     unawaited(_sendMessage());
@@ -517,7 +529,9 @@ class _ChatPanelState extends State<ChatPanel> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
                       )
                     : const Icon(Icons.send),
               ),
@@ -529,7 +543,9 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 }
 
+/// A widget that displays a single chat message.
 class _ChatMessageWidget extends StatefulWidget {
+  /// Creates a [_ChatMessageWidget].
   const _ChatMessageWidget({
     required this.message,
     required this.onCopyToEditor,
@@ -537,14 +553,20 @@ class _ChatMessageWidget extends StatefulWidget {
     super.key,
   });
 
+  /// The message to display.
   final ChatMessage message;
+
+  /// Callback when the copy-to-editor button is pressed.
   final ValueChanged<String> onCopyToEditor;
+
+  /// Whether the message is currently streaming.
   final bool isStreaming;
 
   @override
   State<_ChatMessageWidget> createState() => _ChatMessageWidgetState();
 }
 
+/// State for [_ChatMessageWidget].
 class _ChatMessageWidgetState extends State<_ChatMessageWidget>
     with AutomaticKeepAliveClientMixin {
   @override

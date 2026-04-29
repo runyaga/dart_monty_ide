@@ -1,5 +1,4 @@
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
-import 'package:dart_monty_ide/src/ui/python_chunk_analyzer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
@@ -270,49 +269,6 @@ class _MontyFindWidget extends StatelessWidget implements PreferredSizeWidget {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _ErrorIndicator extends StatelessWidget {
-  const _ErrorIndicator({
-    required this.notifier,
-    this.errorLine,
-  });
-
-  final CodeIndicatorValueNotifier notifier;
-  final int? errorLine;
-
-  @override
-  Widget build(BuildContext context) {
-    if (errorLine == null) return const SizedBox(width: 20);
-
-    return Container(
-      width: 20,
-      alignment: Alignment.topCenter,
-      child: ListenableBuilder(
-        listenable: notifier,
-        builder: (context, child) {
-          final value = notifier.value;
-          if (value == null) return const SizedBox.shrink();
-          final targetIndex = errorLine! - 1;
-
-          return Stack(
-            children: value.paragraphs.map((p) {
-              if (p.index == targetIndex) {
-                return Positioned(
-                  top: p.offset.dy,
-                  left: 0,
-                  right: 0,
-                  height: p.preferredLineHeight,
-                  child: const Icon(Icons.close, color: Colors.red, size: 16),
-                );
-              }
-              return const SizedBox.shrink();
-            }).toList(),
-          );
-        },
       ),
     );
   }

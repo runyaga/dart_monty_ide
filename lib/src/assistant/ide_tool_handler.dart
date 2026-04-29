@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:dart_monty/dart_monty.dart';
-import 'package:dart_monty_core/dart_monty_core.dart';
 import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 
 /// Implementation of [AssistantToolHandler] that uses the live IDE controllers.
+/// A tool handler that interacts with the Monty IDE state.
 class IdeToolHandler implements AssistantToolHandler {
   /// Creates an [IdeToolHandler].
   IdeToolHandler({
@@ -13,7 +13,10 @@ class IdeToolHandler implements AssistantToolHandler {
     required this.ideController,
   });
 
+  /// The VFS to use for file operations.
   final MontyVfs vfs;
+
+  /// The IDE controller to interact with.
   final MontyIdeController ideController;
 
   @override
@@ -25,10 +28,10 @@ class IdeToolHandler implements AssistantToolHandler {
       await handle.result;
       await runtime.dispose();
     } on MontySyntaxError catch (e) {
-      return {
+      return <String, dynamic>{
         'ok': false,
         'errors': [
-          {
+          <String, dynamic>{
             'line': e.exception?.lineNumber,
             'code': 'syntax-error',
             'message': e.message,
@@ -40,17 +43,19 @@ class IdeToolHandler implements AssistantToolHandler {
     // 2. Type check
     final errors = await Monty.typeCheck(code);
     if (errors.isEmpty) {
-      return {'ok': true, 'errors': []};
+      return <String, dynamic>{'ok': true, 'errors': []};
     }
-    return {
+    return <String, dynamic>{
       'ok': false,
       'errors': errors
-          .map((e) => {
-                'line': e.line,
-                'col': e.column,
-                'code': e.code,
-                'message': e.message,
-              })
+          .map(
+            (e) => <String, dynamic>{
+              'line': e.line,
+              'col': e.column,
+              'code': e.code,
+              'message': e.message,
+            },
+          )
           .toList(),
     };
   }

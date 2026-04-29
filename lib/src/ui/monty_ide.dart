@@ -5,7 +5,6 @@ import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
 import 'package:dart_monty_ide/src/ui/chat_panel.dart';
-import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
@@ -13,7 +12,9 @@ import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
 
+/// A full-featured Python IDE widget with file management and Flutter Bridge.
 class MontyIde extends StatefulWidget {
+  /// Creates a [MontyIde].
   const MontyIde({
     required this.vfs,
     this.controller,
@@ -21,8 +22,13 @@ class MontyIde extends StatefulWidget {
     super.key,
   });
 
+  /// The VFS to use for file operations.
   final MontyVfs vfs;
+
+  /// Optional controller to manage the IDE state externally.
   final MontyIdeController? controller;
+
+  /// Optional registry for the Flutter bridge.
   final WidgetRegistry? registry;
 
   @override
@@ -31,7 +37,6 @@ class MontyIde extends StatefulWidget {
 
 class _MontyIdeState extends State<MontyIde> {
   late final MontyIdeController _controller;
-  late final WidgetRegistry _registry;
   final CodeLineEditingController _editorController = CodeLineEditingController();
   final CodeLineEditingController _assistantCodeController = CodeLineEditingController();
   final GlobalKey<MontyEditorState> _editorKey = GlobalKey<MontyEditorState>();
@@ -39,12 +44,10 @@ class _MontyIdeState extends State<MontyIde> {
   String? _currentFilePath;
   bool _isSaving = false;
   bool _showAssistant = true;
-  bool _showExternals = false;
   bool _viewingAssistantBuffer = false;
   bool _isAssistantProcessing = false;
 
-  double _assistantWidth = 400;
-  double _externalsWidth = 300;
+  final double _assistantWidth = 400;
 
   int _fileExplorerVersion = 0;
   final StreamController<String> _consoleStreamController = StreamController<String>.broadcast();
@@ -53,10 +56,35 @@ class _MontyIdeState extends State<MontyIde> {
   void initState() {
     super.initState();
     _controller = widget.controller ?? MontyIdeController();
-    _registry = widget.registry ?? WidgetRegistry();
+    _controller.addListener(_onControllerChanged);
     _controller.output.listen(_consoleStreamController.add);
     unawaited(_initController());
   }
+
+  void _onControllerChanged() {
+    final line = _controller.lastErrorLine;
+    if (line != null) {
+      final lineIndex = line - 1;
+      final content = _viewingAssistantBuffer
+          ? _assistantCodeController.text
+          : _editorController.text;
+      final lines = content.split('\n');
+      if (lineIndex >= 0 && lineIndex < lines.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final targetController = _viewingAssistantBuffer
+              ? _assistantCodeController
+              : _editorController;
+          targetController.selection = CodeLineSelection(
+            baseIndex: lineIndex,
+            baseOffset: 0,
+            extentIndex: lineIndex,
+            extentOffset: lines[lineIndex].length,
+          );
+        });
+      }
+    }
+  }
+
 
   Future<void> _initController() async {
     if (!_controller.isInitialized) {
@@ -111,7 +139,7 @@ class _MontyIdeState extends State<MontyIde> {
 
     try {
       await assistant.processPrompt(prompt);
-    } catch (e) {
+    } on Exception catch (e) {
       _assistantCodeController.text = 'Error: $e';
     } finally {
       await subscription.cancel();
@@ -127,7 +155,7 @@ class _MontyIdeState extends State<MontyIde> {
         FileExplorer(
           key: ValueKey('explorer_$_fileExplorerVersion'),
           vfs: widget.vfs,
-          onFileSelected: (path) => unawaited(_loadFile(path)),
+          onFileSelected: _loadFile,
         ),
         Expanded(
           child: Column(
@@ -198,6 +226,22 @@ class _MontyIdeState extends State<MontyIde> {
           ),
           const Spacer(),
           IconButton(
+            onPressed: () {
+              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+              unawaited(_handleSaveAs(code));
+            },
+            icon: const Icon(Icons.save_alt, color: Colors.blueGrey),
+            tooltip: 'Save As',
+          ),
+          IconButton(
+            onPressed: () {
+              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+              unawaited(_controller.typeCheck(code));
+            },
+            icon: const Icon(Icons.fact_check_outlined, color: Colors.blue),
+            tooltip: 'Type Check',
+          ),
+          IconButton(
             onPressed: _handleRun,
             icon: const Icon(Icons.play_arrow, color: Colors.green),
             tooltip: 'Run',
@@ -213,9 +257,46 @@ class _MontyIdeState extends State<MontyIde> {
   }
 
   Future<void> _handleSaveAs(String code) async {
-    // Basic implementation for now
-    await widget.vfs.writeFile('ai_generated.py', code);
-    setState(() => _fileExplorerVersion++);
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save As Python File'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: 'filename.py'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, nameController.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (name != null && name.isNotEmpty) {
+      final String fileName = name.endsWith('.py') ? name : '$name.py';
+      setState(() => _isSaving = true);
+      try {
+        await widget.vfs.writeFile(fileName, code);
+        setState(() {
+          _fileExplorerVersion++;
+          _currentFilePath = fileName;
+          _editorController.text = code;
+          _viewingAssistantBuffer = false;
+        });
+      } on Exception catch (e) {
+        debugPrint('Error saving: $e');
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override

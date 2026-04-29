@@ -29,9 +29,12 @@ class OpenResponsesLlmService implements LlmService {
 
     unawaited(() async {
       try {
-        // TODO: Full implementation for OpenResponses 0.3.2
-        controller.add(const LlmResponseChunk(
-            text: 'OpenResponses 0.3.2 integration in progress...'));
+        // TODO(dev): Full implementation for OpenResponses 0.3.2.
+        controller.add(
+          const LlmResponseChunk(
+            text: 'OpenResponses 0.3.2 integration in progress...',
+          ),
+        );
       } on Exception catch (e) {
         controller.addError(e);
       } finally {

@@ -35,16 +35,17 @@ class OllamaLlmService implements LlmService {
       return ChatMessage(
         role: role,
         content: content,
-        toolCalls: toolCallsData
-            ?.map((tc) => ToolCall(
-                  function: ToolCallFunction(
-                    name: tc['function']['name'] as String? ?? '',
-                    arguments:
-                        tc['function']['arguments'] as Map<String, dynamic>? ??
-                            {},
-                  ),
-                ))
-            .toList(),
+        toolCalls: toolCallsData?.map((dynamic tc) {
+          final map = tc as Map<String, dynamic>;
+          final function = map['function'] as Map<String, dynamic>;
+          return ToolCall(
+            function: ToolCallFunction(
+              name: function['name'] as String? ?? '',
+              arguments:
+                  function['arguments'] as Map<String, dynamic>? ?? {},
+            ),
+          );
+        }).toList(),
       );
     }).toList();
 
@@ -66,8 +67,11 @@ class OllamaLlmService implements LlmService {
       tools: ollamaTools,
       options: ModelOptions(
         temperature: config.temperature,
-        numPredict: 2048,
-        stop: const StopSequence.list(['<|end_of_text|>', 'USER:', 'ASSISTANT:']),
+        stop: const StopSequence.list([
+          '<|end_of_text|>',
+          'USER:',
+          'ASSISTANT:',
+        ]),
       ),
     );
 
@@ -76,7 +80,13 @@ class OllamaLlmService implements LlmService {
 
     unawaited(() async {
       try {
-        final stream = client.chat.createStream(request: request);
+        final stream = client.chat.createStream(request: request).timeout(
+          const Duration(seconds: 30),
+          onTimeout: (sink) {
+            _log('TURN TIMED OUT after 30s');
+            sink.addError(Exception('LLM turn timed out'));
+          },
+        );
         await for (final chunk in stream) {
           final delta = chunk.message?.content;
           final toolCalls = chunk.message?.toolCalls?.map((tc) {
@@ -91,7 +101,12 @@ class OllamaLlmService implements LlmService {
 
           if ((delta != null && delta.isNotEmpty) ||
               (toolCalls != null && toolCalls.isNotEmpty)) {
-            controller.add(LlmResponseChunk(text: delta, toolCalls: toolCalls));
+            controller.add(
+              LlmResponseChunk(
+                text: delta,
+                toolCalls: toolCalls,
+              ),
+            );
           }
         }
       } on Exception catch (e) {

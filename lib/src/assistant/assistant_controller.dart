@@ -102,6 +102,7 @@ class AssistantController {
   }
 
   Future<String> _loop() async {
+    _log('--- STARTING TURN ${_turnCount + 1} / $maxTurns ---');
     if (_turnCount >= maxTurns) {
       final msg = '⚠️ Verification turn limit reached ($maxTurns).';
       _log(msg);
