@@ -21,5 +21,8 @@ void main() {
     expect(find.byType(MontyEditor), findsOneWidget);
     // Verify that the console is present.
     expect(find.byType(MontyConsole), findsOneWidget);
+
+    // Clear pending cursor blink timers
+    await tester.pump(const Duration(seconds: 1));
   });
 }

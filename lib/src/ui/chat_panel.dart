@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dart_monty_ide/src/assistant/assistant_controller.dart';
-import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
 import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
@@ -104,6 +103,8 @@ class ChatPanel extends StatefulWidget {
 
 class _ChatPanelState extends State<ChatPanel> {
   final List<ChatMessage> _messages = [];
+  double _temperature = 0.1;
+
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -118,10 +119,6 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _showDebug = false;
   String _lastDebugLog = '';
 
-  // RECURSION SAFETY: Track tool call count and history to prevent loops.
-  int _toolCallCount = 0;
-  final Set<String> _toolCallHistory = {};
-
   late LlmService _ollamaService;
   late LlmService _openResponsesService;
 
@@ -132,6 +129,7 @@ class _ChatPanelState extends State<ChatPanel> {
     _openResponsesService = OpenResponsesLlmService();
     unawaited(_logDebug('Chat initialized.'));
   }
+
 
   @override
   void dispose() {
@@ -150,57 +148,6 @@ class _ChatPanelState extends State<ChatPanel> {
   LlmService get _currentService =>
       _provider == LlmProvider.ollama ? _ollamaService : _openResponsesService;
 
-  List<LlmTool> get _tools => [
-        const LlmTool(
-          name: 'type_check',
-          description:
-              'Performs static analysis on the code and returns a list of typing errors. ALWAYS call this before run_python.',
-          parameters: {
-            'type': 'object',
-            'properties': {
-              'code': {
-                'type': 'string',
-                'description': 'The Python code to type-check.',
-              },
-            },
-            'required': ['code'],
-          },
-        ),
-        const LlmTool(
-          name: 'run_python',
-          description:
-              'Executes Monty Python code in the sandbox and returns output. Only call if type_check returns no errors.',
-          parameters: {
-            'type': 'object',
-            'properties': {
-              'code': {
-                'type': 'string',
-                'description': 'The Python code to execute.',
-              },
-            },
-            'required': ['code'],
-          },
-        ),
-        const LlmTool(
-          name: 'write_file',
-          description: 'Creates or updates a file in the workspace.',
-          parameters: {
-            'type': 'object',
-            'properties': {
-              'path': {
-                'type': 'string',
-                'description': 'The filename (e.g. "script.py").',
-              },
-              'content': {
-                'type': 'string',
-                'description': 'The text content to write.',
-              },
-            },
-            'required': ['path', 'content'],
-          },
-        ),
-      ];
-
   Future<void> _sendMessage() async {
     final prompt = _inputController.text.trim();
     if (prompt.isEmpty || _isStreaming) return;
@@ -210,29 +157,14 @@ class _ChatPanelState extends State<ChatPanel> {
       setState(() {
         _messages.add(ChatMessage(role: 'user', content: prompt));
         _isStreaming = true;
-        _toolCallCount = 0; // Reset safety counters
-        _toolCallHistory.clear();
       });
     }
 
     _scrollToBottom(force: true);
-    await _getLlmResponse();
+    await _getLlmResponse(prompt);
   }
 
-  Future<void> _getLlmResponse() async {
-    // Check if we hit the turn limit to prevent infinite loops
-    if (_toolCallCount >= 10) {
-      await _logDebug('Turn limit reached. Stopping tool chain.');
-      if (mounted) {
-        setState(() => _isStreaming = false);
-        _messages.add(ChatMessage(
-          role: 'assistant',
-          content: '⚠️ Stopping: Verification turn limit (10) reached.',
-        ));
-      }
-      return;
-    }
-
+  Future<void> _getLlmResponse(String prompt) async {
     String sysPrompt;
     try {
       sysPrompt = await widget.vfs.readFile('system_prompt.txt');
@@ -241,113 +173,84 @@ class _ChatPanelState extends State<ChatPanel> {
       await _logDebug('Failed to read system_prompt.txt: $e');
     }
 
-    // Filter history to exclude UI-only status messages.
-    final history = [
-      {'role': 'system', 'content': sysPrompt},
-      ..._messages.where((m) => !m.isUiOnly).map(
-        (m) {
-          final map = <String, dynamic>{
-            'role': m.role,
-            'content': m.content,
-          };
-          if (m.toolCallId != null) {
-            map['tool_call_id'] = m.toolCallId;
-          }
-          if (m.toolCalls != null) {
-            map['tool_calls'] = m.toolCalls!
-                .map((tc) => {
-                      'id': tc.id,
-                      'type': 'function',
-                      'function': {
-                        'name': tc.name,
-                        'arguments': tc.arguments,
-                      }
-                    })
-                .toList();
-          }
-          return map;
-        },
+    final toolHandler =
+        IdeToolHandler(vfs: widget.vfs, ideController: widget.controller);
+    final assistant = AssistantController(
+      toolHandler: toolHandler,
+      llmService: _currentService,
+      config: LlmConfig(
+        provider: _provider,
+        baseUrl: _ollamaUrlController.text.trim(),
+        model: _modelController.text.trim(),
+        temperature: _temperature,
       ),
-    ];
-
-    await _logDebug(
-        'SENDING HISTORY TO LLM (${history.length} messages):\n${const JsonEncoder.withIndent('  ').convert(history)}');
-
-    final config = LlmConfig(
-      provider: _provider,
-      baseUrl: _ollamaUrlController.text.trim(),
-      model: _modelController.text.trim(),
+      systemPrompt: sysPrompt,
     );
 
-    final assistantMsgContent = ChatMessage(role: 'assistant');
-    if (mounted) {
+    final StreamSubscription<AssistantEvent> subscription =
+        assistant.events.listen((AssistantEvent event) {
+      if (!mounted) return;
       setState(() {
-        _messages.add(assistantMsgContent);
-      });
-    }
-
-    await _logDebug(
-      'Turn ${_toolCallCount + 1}: Requesting response from ${config.model}',
-    );
-
-    final toolCalls = <LlmToolCall>[];
-    try {
-      final stream = _currentService.streamResponse(
-        messages: history,
-        config: config,
-        tools: _tools,
-      );
-
-      await for (final chunk in stream) {
-        if (!mounted) break;
-        if (chunk.text != null) {
-          assistantMsgContent.append(chunk.text!);
-        }
-        if (chunk.toolCalls != null) {
-          toolCalls.addAll(chunk.toolCalls!);
-        }
-        _scrollToBottom();
-      }
-
-      if (toolCalls.isNotEmpty) {
-        await _logDebug('Received ${toolCalls.length} tool calls');
-
-        final assistantToolCallMsg = ChatMessage(
-          role: 'assistant',
-          content: assistantMsgContent.content,
-          toolCalls: toolCalls,
-          isUiOnly: false,
-        );
-
-        if (_messages.isNotEmpty) {
-          _messages.removeLast();
-        }
-        _messages.add(assistantToolCallMsg);
-
-        _toolCallCount++;
-        for (final call in toolCalls) {
-          final callSig = '${call.name}:${jsonEncode(call.arguments)}';
-          if (_toolCallHistory.contains(callSig)) {
-            await _logDebug('Loop detected: LLM repeated call $callSig');
-            assistantToolCallMsg
-                .append('\n\n⚠️ Loop detected: Stopping execution.');
-            if (mounted) setState(() => _isStreaming = false);
-            return;
+        if (event is AssistantTextEvent) {
+          // If the last message isn't an assistant message or is UI-only, start a new one.
+          if (_messages.isEmpty ||
+              _messages.last.role != 'assistant' ||
+              _messages.last.isUiOnly) {
+            _messages.add(ChatMessage(role: 'assistant', content: event.text));
+          } else {
+            _messages.last.append(event.text);
           }
-          _toolCallHistory.add(callSig);
-          await _handleToolCall(call);
+        } else if (event is ToolCallEvent) {
+          _messages.add(
+            ChatMessage(
+              role: 'assistant',
+              content: '🛠️ Calling tool: ${event.name}...',
+              isUiOnly: true,
+            ),
+          );
+          if (event.name == 'run_python' || event.name == 'write_file') {
+            final String? code =
+                (event.arguments['code'] ?? event.arguments['content'])
+                    as String?;
+            if (code != null) {
+              widget.onAssistantCode?.call(code);
+            }
+          }
+        } else if (event is ToolResultEvent) {
+          _messages.add(
+            ChatMessage(
+              role: 'tool',
+              content: jsonEncode(event.result),
+              isUiOnly: false,
+            ),
+          );
+          if (event.name == 'write_file') {
+            widget.onFileWritten?.call();
+          }
+        } else if (event is AssistantLogEvent) {
+          unawaited(_logDebug(event.message));
         }
-        if (mounted) await _getLlmResponse();
-      } else {
-        await _logDebug('No tool calls received, sequence finished.');
-      }
+      });
+      _scrollToBottom();
+    });
+
+    try {
+      await assistant.processPrompt(prompt);
     } on Exception catch (e) {
-      await _logDebug('LLM Error: $e');
+      await _logDebug('Assistant Error: $e');
       if (mounted) {
-        assistantMsgContent.append('\n\n**Error:** $e');
+        setState(() {
+          if (_messages.isNotEmpty && _messages.last.role == 'assistant') {
+            _messages.last.append('\n\n**Error:** $e');
+          } else {
+            _messages.add(ChatMessage(role: 'assistant', content: '**Error:** $e'));
+          }
+        });
       }
     } finally {
-      if (mounted && toolCalls.isEmpty) {
+      await subscription.cancel();
+      assistant.dispose();
+      if (mounted) {
         setState(() => _isStreaming = false);
       }
     }
@@ -370,60 +273,6 @@ class _ChatPanelState extends State<ChatPanel> {
       } catch (_) {}
       await widget.vfs.writeFile('assistant_debug.log', '$current$entry\n');
     } catch (_) {}
-  }
-
-  Future<void> _handleToolCall(LlmToolCall call) async {
-    final toolMsg = ChatMessage(
-      role: 'assistant',
-      content: '🛠️ Calling tool: ${call.name}...',
-      isUiOnly: true,
-    );
-    if (mounted) {
-      setState(() {
-        _messages.add(toolMsg);
-      });
-    }
-    _scrollToBottom(force: true);
-
-    final toolHandler =
-        IdeToolHandler(vfs: widget.vfs, ideController: widget.controller);
-    Object? result;
-    try {
-      if (call.name == 'type_check') {
-        result = await toolHandler
-            .typeCheck((call.arguments['code'] as String?) ?? '');
-      } else if (call.name == 'run_python') {
-        widget.onAssistantCode?.call((call.arguments['code'] as String?) ?? '');
-        result = await toolHandler
-            .runPython((call.arguments['code'] as String?) ?? '');
-      } else if (call.name == 'write_file') {
-        widget.onAssistantCode
-            ?.call((call.arguments['content'] as String?) ?? '');
-        result = await toolHandler.writeFile(
-          (call.arguments['path'] as String?) ?? 'file.py',
-          (call.arguments['content'] as String?) ?? '',
-        );
-        widget.onFileWritten?.call();
-      }
-    } on Exception catch (e) {
-      result = {'error': e.toString()};
-    }
-
-    await _logDebug('TOOL RESULT [${call.id}]: ${jsonEncode(result)}');
-
-    if (mounted) {
-      setState(() {
-        _messages.add(
-          ChatMessage(
-            role: 'tool',
-            content: jsonEncode(result),
-            toolCallId: call.id,
-            isUiOnly: false,
-          ),
-        );
-      });
-      _scrollToBottom(force: true);
-    }
   }
 
   DateTime _lastScroll = DateTime.now();
@@ -481,79 +330,125 @@ class _ChatPanelState extends State<ChatPanel> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           color: Theme.of(context).secondaryHeaderColor,
-          child: Row(
-            children: [
-              const Text(
-                'ASSISTANT',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-              ),
-              const Spacer(),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: _viewSystemPrompt,
-                icon: const Icon(Icons.shield_outlined, size: 14),
-                tooltip: 'View System Prompt',
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () => setState(() => _showDebug = !_showDebug),
-                icon: Icon(
-                  Icons.bug_report,
-                  size: 14,
-                  color: _showDebug ? Colors.red : null,
+          height: 40,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                const Text(
+                  'ASSISTANT',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                 ),
-                tooltip: 'Show Debug Logs',
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: _clearChat,
-                icon: const Icon(Icons.delete_outline, size: 14),
-                tooltip: 'Clear Chat',
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () => setState(() => _showSettings = !_showSettings),
-                icon: Icon(
-                  Icons.settings,
-                  size: 14,
-                  color: _showSettings ? Colors.blue : null,
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: _viewSystemPrompt,
+                  icon: const Icon(Icons.shield_outlined, size: 14),
+                  tooltip: 'View System Prompt',
                 ),
-                tooltip: 'LLM Settings',
-              ),
-              const SizedBox(width: 8),
-              DropdownButton<LlmProvider>(
-                value: _provider,
-                isDense: true,
-                underline: const SizedBox(),
-                style: const TextStyle(fontSize: 11, color: Colors.black),
-                items: LlmProvider.values.map((p) {
-                  return DropdownMenuItem(
-                    value: p,
-                    child: Text(p.name.toUpperCase()),
-                  );
-                }).toList(),
-                onChanged: (v) {
-                  if (v != null) setState(() => _provider = v);
-                },
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close, size: 16),
-                tooltip: 'Collapse Assistant',
-              ),
-            ],
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => setState(() => _showDebug = !_showDebug),
+                  icon: Icon(
+                    Icons.bug_report,
+                    size: 14,
+                    color: _showDebug ? Colors.red : null,
+                  ),
+                  tooltip: 'Show Debug Logs',
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: _clearChat,
+                  icon: const Icon(Icons.delete_outline, size: 14),
+                  tooltip: 'Clear Chat',
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => setState(() => _showSettings = !_showSettings),
+                  icon: Icon(
+                    Icons.settings,
+                    size: 14,
+                    color: _showSettings ? Colors.blue : null,
+                  ),
+                  tooltip: 'LLM Settings',
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<LlmProvider>(
+                  value: _provider,
+                  isDense: true,
+                  underline: const SizedBox(),
+                  style: const TextStyle(fontSize: 11, color: Colors.black),
+                  items: LlmProvider.values.map((p) {
+                    return DropdownMenuItem(
+                      value: p,
+                      child: Text(p.name.toUpperCase()),
+                    );
+                  }).toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _provider = v);
+                  },
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: widget.onClose,
+                  icon: const Icon(Icons.close, size: 16),
+                  tooltip: 'Collapse Assistant',
+                ),
+              ],
+            ),
           ),
         ),
+        if (_showSettings)
+          Container(
+            color: Theme.of(context).cardColor,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Text('Temperature', style: TextStyle(fontSize: 10)),
+                    Expanded(
+                      child: Slider(
+                        value: _temperature,
+                        min: 0,
+                        max: 1,
+                        divisions: 10,
+                        label: _temperature.toStringAsFixed(1),
+                        onChanged: (v) => setState(() => _temperature = v),
+                      ),
+                    ),
+                    Text(_temperature.toStringAsFixed(1),
+                        style: const TextStyle(fontSize: 10)),
+                  ],
+                ),
+                TextField(
+                  controller: _ollamaUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Ollama Base URL',
+                    isDense: true,
+                    labelStyle: TextStyle(fontSize: 12),
+                  ),
+                ),
+                TextField(
+                  controller: _modelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Model Name',
+                    isDense: true,
+                    labelStyle: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (_showDebug)
           Container(
             height: 350,

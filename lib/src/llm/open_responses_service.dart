@@ -4,7 +4,7 @@ import 'package:open_responses/open_responses.dart';
 
 /// Implementation of [LlmService] using the Open Responses (OpenAI-compatible) API.
 class OpenResponsesLlmService implements LlmService {
-  late OpenResponsesClient _client;
+  OpenResponsesClient? _client;
 
   @override
   Stream<LlmResponseChunk> streamResponse({
@@ -12,13 +12,14 @@ class OpenResponsesLlmService implements LlmService {
     required LlmConfig config,
     List<LlmTool>? tools,
   }) {
-    _client = OpenResponsesClient(
+    final client = OpenResponsesClient(
       config: OpenResponsesConfig(
         baseUrl: config.baseUrl,
         authProvider:
             config.apiKey != null ? BearerTokenProvider(config.apiKey!) : null,
       ),
     );
+    _client = client;
 
     final controller = StreamController<LlmResponseChunk>();
 
@@ -43,6 +44,6 @@ class OpenResponsesLlmService implements LlmService {
 
   @override
   void dispose() {
-    _client.close();
+    _client?.close();
   }
 }

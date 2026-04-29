@@ -64,10 +64,10 @@ class OllamaLlmService implements LlmService {
       model: config.model,
       messages: ollamaMessages,
       tools: ollamaTools,
-      options: const ModelOptions(
-        temperature: 0.1,
+      options: ModelOptions(
+        temperature: config.temperature,
         numPredict: 2048,
-        stop: StopSequence.list(['<|end_of_text|>', 'USER:', 'ASSISTANT:']),
+        stop: const StopSequence.list(['<|end_of_text|>', 'USER:', 'ASSISTANT:']),
       ),
     );
 
@@ -75,15 +75,11 @@ class OllamaLlmService implements LlmService {
         'Requesting turn with roles: ${messages.map((m) => m['role']).toList()}');
 
     unawaited(() async {
-      var fullContent = '';
-      var toolCalled = false;
-
       try {
         final stream = client.chat.createStream(request: request);
         await for (final chunk in stream) {
           final delta = chunk.message?.content;
           final toolCalls = chunk.message?.toolCalls?.map((tc) {
-            toolCalled = true;
             final name = tc.function?.name ?? '';
             _log('LLM requested tool: $name');
             return LlmToolCall(
@@ -93,35 +89,9 @@ class OllamaLlmService implements LlmService {
             );
           }).toList();
 
-          if (delta != null) fullContent += delta;
-
           if ((delta != null && delta.isNotEmpty) ||
               (toolCalls != null && toolCalls.isNotEmpty)) {
             controller.add(LlmResponseChunk(text: delta, toolCalls: toolCalls));
-          }
-        }
-
-        // HEURISTIC REPAIR
-        if (!toolCalled) {
-          final codeBlockRegex = RegExp(r'```(?:python)?\n([\s\S]*?)```');
-          final match = codeBlockRegex.firstMatch(fullContent);
-
-          if (match != null) {
-            final code = match.group(1)?.trim();
-            if (code != null && code.isNotEmpty) {
-              _log('Heuristic: Triggering type_check for code block');
-              controller.add(
-                LlmResponseChunk(
-                  toolCalls: [
-                    LlmToolCall(
-                      id: '',
-                      name: 'type_check',
-                      arguments: {'code': code},
-                    ),
-                  ],
-                ),
-              );
-            }
           }
         }
       } on Exception catch (e) {

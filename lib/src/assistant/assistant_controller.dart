@@ -3,6 +3,51 @@ import 'dart:convert';
 import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 
+/// Events emitted by the [AssistantController] during the verification loop.
+sealed class AssistantEvent {}
+
+/// Emitted when the assistant appends text to its response.
+class AssistantTextEvent extends AssistantEvent {
+  /// Creates an [AssistantTextEvent].
+  AssistantTextEvent(this.text);
+
+  /// The text appended by the assistant.
+  final String text;
+}
+
+/// Emitted when a tool is being called.
+class ToolCallEvent extends AssistantEvent {
+  /// Creates a [ToolCallEvent].
+  ToolCallEvent(this.name, this.arguments);
+
+  /// The name of the tool.
+  final String name;
+
+  /// The arguments passed to the tool.
+  final Map<String, dynamic> arguments;
+}
+
+/// Emitted when a tool returns a result.
+class ToolResultEvent extends AssistantEvent {
+  /// Creates a [ToolResultEvent].
+  ToolResultEvent(this.name, this.result);
+
+  /// The name of the tool.
+  final String name;
+
+  /// The result returned by the tool.
+  final Object? result;
+}
+
+/// Emitted for raw debug logging.
+class AssistantLogEvent extends AssistantEvent {
+  /// Creates an [AssistantLogEvent].
+  AssistantLogEvent(this.message);
+
+  /// The log message.
+  final String message;
+}
+
 /// Headless controller that manages the AI Assistant's verification loop.
 class AssistantController {
   /// Creates an [AssistantController].
@@ -13,13 +58,29 @@ class AssistantController {
     required this.systemPrompt,
   });
 
+  /// The tool handler to execute tools.
   final AssistantToolHandler toolHandler;
+
+  /// The LLM service to stream responses.
   final LlmService llmService;
+
+  /// The LLM configuration.
   final LlmConfig config;
+
+  /// The system prompt to use.
   final String systemPrompt;
 
   final List<Map<String, dynamic>> _history = [];
   int _turnCount = 0;
+
+  /// The maximum number of turns allowed in the verification loop.
+  static const int maxTurns = 5;
+
+  final StreamController<AssistantEvent> _eventController =
+      StreamController<AssistantEvent>.broadcast();
+
+  /// Stream of events during processing.
+  Stream<AssistantEvent> get events => _eventController.stream;
 
   /// Returns the current conversation history.
   List<Map<String, dynamic>> get history => List.unmodifiable(_history);
@@ -28,18 +89,32 @@ class AssistantController {
   Future<String> processPrompt(String prompt) async {
     _history.add({'role': 'user', 'content': prompt});
     _turnCount = 0;
-    return await _loop();
+    _log('--- NEW SESSION: $prompt ---');
+    try {
+      return await _loop();
+    } finally {
+      _log('--- SESSION FINISHED ---');
+    }
+  }
+
+  void _log(String message) {
+    _eventController.add(AssistantLogEvent(message));
   }
 
   Future<String> _loop() async {
-    if (_turnCount >= 10) {
-      return '⚠️ Verification turn limit reached.';
+    if (_turnCount >= maxTurns) {
+      final msg = '⚠️ Verification turn limit reached ($maxTurns).';
+      _log(msg);
+      return msg;
     }
 
     final fullHistory = [
       {'role': 'system', 'content': systemPrompt},
       ..._history,
     ];
+
+    _log('Turn ${_turnCount + 1}: Requesting response from LLM...');
+    _log('RAW HISTORY: ${jsonEncode(fullHistory)}');
 
     final stream = llmService.streamResponse(
       messages: fullHistory,
@@ -51,36 +126,51 @@ class AssistantController {
     final toolCalls = <LlmToolCall>[];
 
     await for (final chunk in stream) {
-      if (chunk.text != null) assistantText += chunk.text!;
-      if (chunk.toolCalls != null) toolCalls.addAll(chunk.toolCalls!);
+      if (chunk.text != null) {
+        assistantText += chunk.text!;
+        _eventController.add(AssistantTextEvent(chunk.text!));
+      }
+      if (chunk.toolCalls != null) {
+        toolCalls.addAll(chunk.toolCalls!);
+      }
     }
 
     if (toolCalls.isEmpty) {
       _history.add({'role': 'assistant', 'content': assistantText});
+      _log('Assistant finished: $assistantText');
       return assistantText;
     }
 
     // Record the assistant's tool call in history
+    final toolCallsJson = toolCalls
+        .map(
+          (tc) => {
+            'id': tc.id,
+            'type': 'function',
+            'function': {
+              'name': tc.name,
+              'arguments': tc.arguments,
+            },
+          },
+        )
+        .toList();
+
     _history.add({
       'role': 'assistant',
       'content': assistantText,
-      'tool_calls': toolCalls
-          .map((tc) => {
-                'id': tc.id,
-                'type': 'function',
-                'function': {
-                  'name': tc.name,
-                  'arguments': tc.arguments,
-                }
-              })
-          .toList(),
+      'tool_calls': toolCallsJson,
     });
+
+    _log('Assistant requested tools: ${jsonEncode(toolCallsJson)}');
 
     _turnCount++;
 
     // Execute tools and add results to history
     for (final call in toolCalls) {
+      _eventController.add(ToolCallEvent(call.name, call.arguments));
       final result = await _executeTool(call);
+      _eventController.add(ToolResultEvent(call.name, result));
+      _log('Tool result [${call.name}]: ${jsonEncode(result)}');
       _history.add({
         'role': 'tool',
         'tool_call_id': call.id,
@@ -109,6 +199,11 @@ class AssistantController {
       return {'error': e.toString()};
     }
     return {'error': 'Unknown tool: ${call.name}'};
+  }
+
+  /// Closes the event stream.
+  void dispose() {
+    _eventController.close();
   }
 
   static const List<LlmTool> _tools = [

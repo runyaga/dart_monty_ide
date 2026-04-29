@@ -31,21 +31,25 @@ class ExternalsInspector extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             color: Theme.of(context).secondaryHeaderColor,
-            child: Row(
-              children: [
-                const Text(
-                  'EXTERNALS',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-                const Spacer(),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close, size: 16),
-                  tooltip: 'Collapse Externals',
-                ),
-              ],
+            height: 40,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  const Text(
+                    'EXTERNALS',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close, size: 16),
+                    tooltip: 'Collapse Externals',
+                  ),
+                ],
+              ),
             ),
           ),
           if (extensions.isEmpty)

@@ -17,14 +17,16 @@ void main() {
       );
 
       controller.add('Hello World');
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Hello World'), findsOneWidget);
+      expect(find.textContaining('Hello World'), findsOneWidget);
 
       controller.add('Second Line');
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Second Line'), findsOneWidget);
+      expect(find.textContaining('Second Line'), findsOneWidget);
       await controller.close();
     });
   });
@@ -45,9 +47,12 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byType(ElevatedButton));
+      await tester.tap(find.byIcon(Icons.play_arrow));
       await tester.pump();
       expect(runPressed, isTrue);
+      
+      // Clear pending cursor blink timers
+      await tester.pump(const Duration(seconds: 1));
       controller.dispose();
     });
   });

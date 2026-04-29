@@ -1,4 +1,5 @@
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
+import 'package:dart_monty_ide/src/ui/python_chunk_analyzer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
@@ -114,6 +115,7 @@ class MontyEditorState extends State<MontyEditor> {
               child: CodeEditor(
                 controller: widget.controller,
                 findController: _findController,
+                chunkAnalyzer: const DefaultCodeChunkAnalyzer(),
                 wordWrap: false,
                 autocompleteSymbols: false,
                 style: CodeEditorStyle(
@@ -144,10 +146,6 @@ class MontyEditorState extends State<MontyEditor> {
                       DefaultCodeLineNumber(
                         controller: editingController,
                         notifier: notifier,
-                      ),
-                      _ErrorIndicator(
-                        notifier: notifier,
-                        errorLine: widget.ideController?.lastErrorLine,
                       ),
                       DefaultCodeChunkIndicator(
                         width: 20,
@@ -288,18 +286,19 @@ class _ErrorIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<CodeIndicatorValue?>(
-      valueListenable: notifier,
-      builder: (context, value, child) {
-        if (value == null || errorLine == null) {
-          return const SizedBox(width: 20);
-        }
-        final targetIndex = errorLine! - 1;
+    if (errorLine == null) return const SizedBox(width: 20);
 
-        return Container(
-          width: 20,
-          alignment: Alignment.topCenter,
-          child: Stack(
+    return Container(
+      width: 20,
+      alignment: Alignment.topCenter,
+      child: ListenableBuilder(
+        listenable: notifier,
+        builder: (context, child) {
+          final value = notifier.value;
+          if (value == null) return const SizedBox.shrink();
+          final targetIndex = errorLine! - 1;
+
+          return Stack(
             children: value.paragraphs.map((p) {
               if (p.index == targetIndex) {
                 return Positioned(
@@ -312,9 +311,9 @@ class _ErrorIndicator extends StatelessWidget {
               }
               return const SizedBox.shrink();
             }).toList(),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

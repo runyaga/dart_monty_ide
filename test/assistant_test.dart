@@ -42,10 +42,6 @@ class MockToolHandler implements AssistantToolHandler {
 
 void main() {
   test('AssistantController verification loop test', () async {
-    // Mock sequence:
-    // 1. LLM requests type_check
-    // 2. LLM sees clean type_check, then requests run_python
-    // 3. LLM sees successful run, provides final answer
     final mockLlm = MockLlmService([
       const LlmResponseChunk(
         toolCalls: [
@@ -75,9 +71,46 @@ void main() {
       systemPrompt: 'You are an assistant.',
     );
 
+    final events = <AssistantEvent>[];
+    controller.events.listen(events.add);
+
     final result = await controller.processPrompt('Verify the value of x');
+
+    await Future<void>.delayed(const Duration(milliseconds: 100));
 
     expect(result, contains('x equals 42'));
     expect(controller.history.length, equals(6));
+    
+    // Verify events
+    expect(events.any((e) => e is ToolCallEvent && e.name == 'type_check'), isTrue);
+    expect(events.any((e) => e is ToolCallEvent && e.name == 'run_python'), isTrue);
+    expect(events.any((e) => e is AssistantTextEvent && e.text.contains('verified')), isTrue);
+  });
+
+  test('AssistantController max turns test', () async {
+    // LLM keeps calling type_check forever
+    final mockLlm = MockLlmService(List.generate(10, (index) => 
+      const LlmResponseChunk(
+        toolCalls: [
+          LlmToolCall(
+            id: 'call_loop',
+            name: 'type_check',
+            arguments: {'code': 'x = 1'},
+          )
+        ],
+      ),
+    ));
+
+    final controller = AssistantController(
+      toolHandler: MockToolHandler(),
+      llmService: mockLlm,
+      config: LlmConfig(),
+      systemPrompt: 'You are an assistant.',
+    );
+
+    final result = await controller.processPrompt('Infinite loop test');
+
+    expect(result, contains('turn limit reached'));
+    expect(result, contains('5')); // Check that it mentions the limit (5)
   });
 }

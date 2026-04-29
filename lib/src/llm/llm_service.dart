@@ -17,6 +17,7 @@ class LlmConfig {
     this.baseUrl = 'http://localhost:11434/api',
     this.model = 'gpt-oss:latest',
     this.apiKey,
+    this.temperature = 0.1,
   });
 
   /// The selected provider.
@@ -30,6 +31,9 @@ class LlmConfig {
 
   /// Optional API key.
   final String? apiKey;
+
+  /// Temperature for generation.
+  final double temperature;
 }
 
 /// Represents a tool that the LLM can call.

@@ -60,13 +60,14 @@ class MontyIdeController extends ChangeNotifier {
   ///
   /// Returns the [MontyResult] of the execution.
   /// Results and print outputs are also emitted to the [output] stream.
-  Future<MontyResult?> execute(String code) async {
+  Future<MontyResult?> execute(String code, {bool clear = true}) async {
     if (!_isInitialized) {
       throw StateError(
         'MontyIdeController must be initialized before execution.',
       );
     }
 
+    if (clear) clearConsole();
     _isExecuting = true;
     lastErrorLine = null;
     notifyListeners();
@@ -112,7 +113,12 @@ class MontyIdeController extends ChangeNotifier {
         var errorMessage = '';
         if (montyExc != null) {
           final type = montyExc.excType ?? 'PythonError';
-          errorMessage = '[$type] ${montyExc.message}\n';
+          errorMessage = '[$type] ${montyExc.message}';
+          if (lastErrorLine != null) {
+            errorMessage += ' [IDE: Line $lastErrorLine]';
+          }
+          errorMessage += '\n';
+
           if (montyExc.message
                   .contains('Simple statements must be separated') &&
               code.contains('print ')) {
@@ -128,7 +134,23 @@ class MontyIdeController extends ChangeNotifier {
       return result;
     } on MontySyntaxError catch (e) {
       lastErrorLine = e.exception?.lineNumber;
-      _outputController.add('[SyntaxError] ${e.message}\n');
+      // Also try to translate byte range from message for SyntaxError
+      if (lastErrorLine == null) {
+        final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
+        if (byteMatch != null) {
+          final startByte = int.tryParse(byteMatch.group(1)!);
+          if (startByte != null) {
+            lastErrorLine = _getLineFromByteOffset(
+                '${code.trim()}\n', startByte); // Use same normalization
+          }
+        }
+      }
+
+      var msg = '[SyntaxError] ${e.message}';
+      if (lastErrorLine != null) {
+        msg += ' [IDE: Line $lastErrorLine]';
+      }
+      _outputController.add('$msg\n');
       return null;
     } on MontyScriptError catch (e) {
       lastErrorLine = e.exception?.lineNumber;
@@ -159,6 +181,62 @@ class MontyIdeController extends ChangeNotifier {
       }
     }
     return lineCount;
+  }
+
+  /// Performs static analysis on the given [code].
+  ///
+  /// Errors are emitted to the [output] stream.
+  Future<void> typeCheck(String code) async {
+    clearConsole();
+    _outputController.add('--- Analysis Started ---\n');
+    try {
+      // 1. Syntax/Indentation check (via a dry-run runtime)
+      _outputController.add('🔍 Checking syntax...\n');
+      try {
+        final normalized = '${code.trim()}\n';
+        final runtime = MontyRuntime(extensions: _extensions);
+        final handle = await runtime.execute(normalized);
+        await handle.result; // Wait for parse/exec
+        await runtime.dispose();
+
+      } on MontySyntaxError catch (e) {
+        var msg = '❌ [SyntaxError] ${e.message}';
+        final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
+        if (byteMatch != null) {
+          final startByte = int.tryParse(byteMatch.group(1)!);
+          if (startByte != null) {
+            final line = _getLineFromByteOffset('${code.trim()}\n', startByte);
+            msg += ' [IDE: Line $line]';
+          }
+        }
+        _outputController.add('$msg\n');
+        _outputController.add('--- Analysis Failed ---\n');
+        return;
+      }
+
+      // 2. Static Type Analysis
+      _outputController.add('🔍 Checking types...\n');
+      final errors = await Monty.typeCheck(code);
+      if (errors.isEmpty) {
+        _outputController.add('✅ Analysis complete: No errors found.\n');
+      } else {
+        for (final e in errors) {
+          _outputController.add(
+            '❌ [${e.code}] Line ${e.line}, Col ${e.column}: ${e.message}\n',
+          );
+        }
+        _outputController.add('--- Found ${errors.length} typing errors ---\n');
+      }
+    } on Exception catch (e) {
+      _outputController.add('⚠️ Analysis engine error: $e\n');
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Clears only the console output.
+  void clearConsole() {
+    _outputController.add('___CLEAR_CONSOLE___');
   }
 
   /// Clears the interpreter state.
