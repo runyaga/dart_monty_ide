@@ -59,17 +59,21 @@ class MontyIdeController extends ChangeNotifier {
   /// Executes the given Python [code].
   ///
   /// Returns the [MontyResult] of the execution.
-  /// Results and print outputs are also emitted to the [output] stream.
-  Future<MontyResult?> execute(String code, {bool clear = true}) async {
+  /// Results and print outputs are also emitted to the [output] stream unless [silent] is true.
+  Future<MontyResult?> execute(
+    String code, {
+    bool clear = true,
+    bool silent = false,
+  }) async {
     if (!_isInitialized) {
       throw StateError(
         'MontyIdeController must be initialized before execution.',
       );
     }
 
-    if (clear) clearConsole();
+    if (!silent && clear) clearConsole();
     _isExecuting = true;
-    lastErrorLine = null;
+    if (!silent) lastErrorLine = null;
     notifyListeners();
 
     try {
@@ -81,16 +85,16 @@ class MontyIdeController extends ChangeNotifier {
       // Wait for the result
       final result = await handle.result;
 
-      if (result.printOutput != null && result.printOutput!.isNotEmpty) {
+      if (!silent && result.printOutput != null && result.printOutput!.isNotEmpty) {
         _outputController.add(result.printOutput!);
       }
 
       if (result.isError) {
         final montyExc = result.error;
-        lastErrorLine = montyExc?.lineNumber;
+        if (!silent) lastErrorLine = montyExc?.lineNumber;
 
         // Fallback: Parse line number from message text like "at line 3"
-        if (lastErrorLine == null && montyExc != null) {
+        if (!silent && lastErrorLine == null && montyExc != null) {
           final lineMatch =
               RegExp(r'at line (\d+)').firstMatch(montyExc.message);
           if (lineMatch != null) {
@@ -99,7 +103,7 @@ class MontyIdeController extends ChangeNotifier {
         }
 
         // Fallback: Translate byte range
-        if (lastErrorLine == null && montyExc != null) {
+        if (!silent && lastErrorLine == null && montyExc != null) {
           final byteMatch =
               RegExp(r'at byte range (\d+)').firstMatch(montyExc.message);
           if (byteMatch != null) {
@@ -110,65 +114,79 @@ class MontyIdeController extends ChangeNotifier {
           }
         }
 
-        var errorMessage = '';
-        if (montyExc != null) {
-          final type = montyExc.excType ?? 'PythonError';
-          errorMessage = '[$type] ${montyExc.message}';
-          if (lastErrorLine != null) {
-            errorMessage += ' [IDE: Line $lastErrorLine]';
-          }
-          errorMessage += '\n';
+        if (!silent) {
+          var errorMessage = '';
+          if (montyExc != null) {
+            final type = montyExc.excType ?? 'PythonError';
+            errorMessage = '[$type] ${montyExc.message}';
+            if (lastErrorLine != null) {
+              errorMessage += ' [IDE: Line $lastErrorLine]';
+            }
+            errorMessage += '\n';
 
-          if (montyExc.message
-                  .contains('Simple statements must be separated') &&
-              code.contains('print ')) {
-            errorMessage +=
-                'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
+            if (montyExc.message
+                    .contains('Simple statements must be separated') &&
+                code.contains('print ')) {
+              errorMessage +=
+                  'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
+            }
+          } else {
+            errorMessage = 'Error: Unknown execution failure\n';
           }
-        } else {
-          errorMessage = 'Error: Unknown execution failure\n';
+          _outputController.add(errorMessage);
         }
-        _outputController.add(errorMessage);
       }
 
       return result;
     } on MontySyntaxError catch (e) {
-      lastErrorLine = e.exception?.lineNumber;
-      // Also try to translate byte range from message for SyntaxError
-      if (lastErrorLine == null) {
-        final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
-        if (byteMatch != null) {
-          final startByte = int.tryParse(byteMatch.group(1)!);
-          if (startByte != null) {
-            lastErrorLine = _getLineFromByteOffset(
-                '${code.trim()}\n', startByte); // Use same normalization
+      if (!silent) {
+        lastErrorLine = e.exception?.lineNumber;
+        // Also try to translate byte range from message for SyntaxError
+        if (lastErrorLine == null) {
+          final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
+          if (byteMatch != null) {
+            final startByte = int.tryParse(byteMatch.group(1)!);
+            if (startByte != null) {
+              lastErrorLine = _getLineFromByteOffset(
+                  '${code.trim()}\n', startByte); // Use same normalization
+            }
           }
         }
-      }
 
-      var msg = '[SyntaxError] ${e.message}';
-      if (lastErrorLine != null) {
-        msg += ' [IDE: Line $lastErrorLine]';
+        var msg = '[SyntaxError] ${e.message}';
+        if (lastErrorLine != null) {
+          msg += ' [IDE: Line $lastErrorLine]';
+        }
+        _outputController.add('$msg\n');
       }
-      _outputController.add('$msg\n');
       return null;
     } on MontyScriptError catch (e) {
-      lastErrorLine = e.exception?.lineNumber;
-      _outputController.add('[${e.excType ?? "ScriptError"}] ${e.message}\n');
+      if (!silent) {
+        lastErrorLine = e.exception?.lineNumber;
+        _outputController.add('[${e.excType ?? "ScriptError"}] ${e.message}\n');
+      }
       return null;
     } on MontyResourceError catch (e) {
-      _outputController.add('[ResourceError] ${e.message}\n');
+      if (!silent) {
+        _outputController.add('[ResourceError] ${e.message}\n');
+      }
       return null;
     } on Exception catch (e, stack) {
       debugPrint('Internal System Error: $e');
       debugPrint('Stack Trace: $stack');
-      _outputController.add('[SystemException] $e\n');
+      if (!silent) {
+        _outputController.add('[SystemException] $e\n');
+      }
       return null;
     } finally {
       _isExecuting = false;
       notifyListeners();
     }
   }
+
+  /// Convenience for background introspection.
+  Future<MontyResult?> executeSilent(String code) =>
+      execute(code, silent: true, clear: false);
 
   /// Translates a UTF-8 byte offset to a 1-based line number.
   int _getLineFromByteOffset(String code, int offset) {

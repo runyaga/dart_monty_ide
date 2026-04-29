@@ -126,7 +126,7 @@ packages:
       path: "../dart_monty_core"
       relative: true
     source: path
-    version: "0.0.2"
+    version: "0.17.0"
   dinja:
     dependency: transitive
     description:

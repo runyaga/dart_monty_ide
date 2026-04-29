@@ -5,9 +5,11 @@ import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
 import 'package:dart_monty_ide/src/ui/chat_panel.dart';
+import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
+import 'package:dart_monty_ide/src/ui/variable_inspector.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
@@ -22,13 +24,8 @@ class MontyIde extends StatefulWidget {
     super.key,
   });
 
-  /// The VFS to use for file operations.
   final MontyVfs vfs;
-
-  /// Optional controller to manage the IDE state externally.
   final MontyIdeController? controller;
-
-  /// Optional registry for the Flutter bridge.
   final WidgetRegistry? registry;
 
   @override
@@ -44,13 +41,24 @@ class _MontyIdeState extends State<MontyIde> {
   String? _currentFilePath;
   bool _isSaving = false;
   bool _showAssistant = true;
+  bool _showExternals = false;
+  bool _showVariables = false;
   bool _viewingAssistantBuffer = false;
-  bool _isAssistantProcessing = false;
-
-  final double _assistantWidth = 400;
+  
+  double _explorerWidth = 200;
+  double _assistantWidth = 400;
+  double _externalsWidth = 300;
+  double _variablesWidth = 250;
 
   int _fileExplorerVersion = 0;
   final StreamController<String> _consoleStreamController = StreamController<String>.broadcast();
+
+  // Assistant Background State
+  late final AssistantController _assistant;
+  final List<ChatMessage> _assistantMessages = [];
+  bool _isAssistantStreaming = false;
+  double _assistantTemperature = 0.1;
+  String _assistantDebugLog = '';
 
   @override
   void initState() {
@@ -58,38 +66,89 @@ class _MontyIdeState extends State<MontyIde> {
     _controller = widget.controller ?? MontyIdeController();
     _controller.addListener(_onControllerChanged);
     _controller.output.listen(_consoleStreamController.add);
+    _editorController.addListener(_onEditorChanged);
+    
+    _initAssistant();
     unawaited(_initController());
+  }
+
+  void _initAssistant() {
+    final handler = IdeToolHandler(vfs: widget.vfs, ideController: _controller);
+    _assistant = AssistantController(
+      toolHandler: handler,
+      llmService: OllamaLlmService(),
+      config: LlmConfig(
+        provider: LlmProvider.ollama,
+        baseUrl: 'http://localhost:11434',
+        model: 'gpt-oss:20b',
+        temperature: _assistantTemperature,
+      ),
+      systemPrompt: defaultAssistantPrompt,
+    );
+
+    _assistant.events.listen((event) {
+      if (!mounted) return;
+      setState(() {
+        if (event is AssistantTextEvent) {
+          if (_assistantMessages.isEmpty || _assistantMessages.last.role != 'assistant' || _assistantMessages.last.isUiOnly) {
+            _assistantMessages.add(ChatMessage(role: 'assistant', content: event.text));
+          } else {
+            _assistantMessages.last.append(event.text);
+          }
+        } else if (event is ToolCallEvent) {
+          _assistantMessages.add(ChatMessage(role: 'assistant', content: '🛠️ Calling tool: ${event.name}...', isUiOnly: true));
+          if (event.name == 'run_python' || event.name == 'write_file') {
+            final code = (event.arguments['code'] ?? event.arguments['content']) as String?;
+            if (code != null) _assistantCodeController.text = code;
+          }
+        } else if (event is ToolResultEvent) {
+          _assistantMessages.add(ChatMessage(role: 'tool', content: event.result.toString(), isUiOnly: false));
+          if (event.name == 'write_file') _fileExplorerVersion++;
+        } else if (event is AssistantLogEvent) {
+          _assistantDebugLog = '${DateTime.now().toIso8601String()}: ${event.message}\n$_assistantDebugLog';
+        }
+      });
+    });
   }
 
   void _onControllerChanged() {
     final line = _controller.lastErrorLine;
     if (line != null) {
       final lineIndex = line - 1;
-      final content = _viewingAssistantBuffer
-          ? _assistantCodeController.text
-          : _editorController.text;
+      final content = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
       final lines = content.split('\n');
       if (lineIndex >= 0 && lineIndex < lines.length) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final targetController = _viewingAssistantBuffer
-              ? _assistantCodeController
-              : _editorController;
+          final targetController = _viewingAssistantBuffer ? _assistantCodeController : _editorController;
           targetController.selection = CodeLineSelection(
-            baseIndex: lineIndex,
-            baseOffset: 0,
-            extentIndex: lineIndex,
-            extentOffset: lines[lineIndex].length,
+            baseIndex: lineIndex, baseOffset: 0, extentIndex: lineIndex, extentOffset: lines[lineIndex].length,
           );
         });
       }
     }
   }
 
+  Timer? _saveTimer;
+  void _onEditorChanged() {
+    if (_currentFilePath != null) {
+      _saveTimer?.cancel();
+      _saveTimer = Timer(const Duration(milliseconds: 1000), () async {
+        if (_currentFilePath != null) {
+          if (mounted) setState(() => _isSaving = true);
+          try {
+            await widget.vfs.writeFile(_currentFilePath!, _editorController.text);
+          } catch (e) {
+            debugPrint('Auto-save error: $e');
+          } finally {
+            if (mounted) setState(() => _isSaving = false);
+          }
+        }
+      });
+    }
+  }
 
   Future<void> _initController() async {
-    if (!_controller.isInitialized) {
-      await _controller.initialize();
-    }
+    if (!_controller.isInitialized) await _controller.initialize();
   }
 
   Future<void> _loadFile(String path) async {
@@ -110,41 +169,19 @@ class _MontyIdeState extends State<MontyIde> {
     unawaited(_controller.execute(code));
   }
 
-  Future<void> _handleAssistantPrompt(String prompt) async {
-    if (_isAssistantProcessing) return;
-    setState(() => _isAssistantProcessing = true);
-
-    final handler = IdeToolHandler(vfs: widget.vfs, ideController: _controller);
-    final assistant = AssistantController(
-      toolHandler: handler,
-      llmService: OllamaLlmService(),
-      config: LlmConfig(
-        provider: LlmProvider.ollama,
-        baseUrl: 'http://localhost:11434',
-        model: 'gpt-oss:20b',
-      ),
-      systemPrompt: defaultAssistantPrompt,
-    );
-
-    final subscription = assistant.events.listen((event) {
-      if (event is ToolCallEvent) {
-        if (event.name == 'run_python' || event.name == 'write_file') {
-          final code = (event.arguments['code'] ?? event.arguments['content']) as String?;
-          if (code != null) {
-            _assistantCodeController.text = code;
-          }
-        }
-      }
+  Future<void> _handleAssistantSendMessage(String prompt) async {
+    if (_isAssistantStreaming) return;
+    setState(() {
+      _assistantMessages.add(ChatMessage(role: 'user', content: prompt));
+      _isAssistantStreaming = true;
     });
 
     try {
-      await assistant.processPrompt(prompt);
-    } on Exception catch (e) {
-      _assistantCodeController.text = 'Error: $e';
+      await _assistant.processPrompt(prompt);
+    } catch (e) {
+      setState(() => _assistantMessages.add(ChatMessage(role: 'assistant', content: 'Error: $e')));
     } finally {
-      await subscription.cancel();
-      assistant.dispose();
-      if (mounted) setState(() => _isAssistantProcessing = false);
+      if (mounted) setState(() => _isAssistantStreaming = false);
     }
   }
 
@@ -152,10 +189,22 @@ class _MontyIdeState extends State<MontyIde> {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        FileExplorer(
-          key: ValueKey('explorer_$_fileExplorerVersion'),
-          vfs: widget.vfs,
-          onFileSelected: _loadFile,
+        SizedBox(
+          width: _explorerWidth,
+          child: FileExplorer(
+            key: ValueKey('explorer_$_fileExplorerVersion'),
+            vfs: widget.vfs,
+            onFileSelected: _loadFile,
+          ),
+        ),
+        _HorizontalResizer(
+          onDrag: (delta) {
+            setState(() {
+              _explorerWidth += delta;
+              if (_explorerWidth < 100) _explorerWidth = 100;
+              if (_explorerWidth > 400) _explorerWidth = 400;
+            });
+          },
         ),
         Expanded(
           child: Column(
@@ -166,11 +215,11 @@ class _MontyIdeState extends State<MontyIde> {
                 child: _viewingAssistantBuffer
                     ? MontyAssistantBuffer(
                         controller: _assistantCodeController,
-                        isProcessing: _isAssistantProcessing,
-                        onPrompt: _handleAssistantPrompt,
+                        isProcessing: _isAssistantStreaming,
+                        onPrompt: _handleAssistantSendMessage,
                         onRun: (code) => unawaited(_controller.execute(code)),
                         onTypeCheck: (code) => unawaited(_controller.typeCheck(code)),
-                        onSaveAs: (code) => _handleSaveAs(code),
+                        onSaveAs: (code) => unawaited(_handleSaveAs(code)),
                       )
                     : MontyEditor(
                         key: _editorKey,
@@ -187,23 +236,71 @@ class _MontyIdeState extends State<MontyIde> {
             ],
           ),
         ),
-        if (_showAssistant) 
+        if (_showAssistant) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _assistantWidth -= delta;
+                if (_assistantWidth < 200) _assistantWidth = 200;
+                if (_assistantWidth > 600) _assistantWidth = 600;
+              });
+            },
+          ),
           SizedBox(
             width: _assistantWidth,
             child: ChatPanel(
               vfs: widget.vfs,
               controller: _controller,
+              assistant: _assistant,
+              messages: _assistantMessages,
+              isStreaming: _isAssistantStreaming,
+              onSendMessage: _handleAssistantSendMessage,
+              temperature: _assistantTemperature,
+              onTemperatureChanged: (v) => setState(() => _assistantTemperature = v),
+              debugLog: _assistantDebugLog,
               onCopyToEditor: (code) {
                 _editorController.text = code;
                 setState(() => _viewingAssistantBuffer = false);
               },
-              onAssistantCode: (code) {
-                _assistantCodeController.text = code;
-                setState(() => _viewingAssistantBuffer = true);
-              },
               onClose: () => setState(() => _showAssistant = false),
+              onClearChat: () => setState(() => _assistantMessages.clear()),
             ),
           ),
+        ],
+        if (_showVariables) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _variablesWidth -= delta;
+                if (_variablesWidth < 150) _variablesWidth = 150;
+              });
+            },
+          ),
+          SizedBox(
+            width: _variablesWidth,
+            child: VariableInspector(
+              controller: _controller,
+              onClose: () => setState(() => _showVariables = false),
+            ),
+          ),
+        ],
+        if (_showExternals) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _externalsWidth -= delta;
+                if (_externalsWidth < 150) _externalsWidth = 150;
+              });
+            },
+          ),
+          SizedBox(
+            width: _externalsWidth,
+            child: ExternalsInspector(
+              controller: _controller,
+              onClose: () => setState(() => _showExternals = false),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -214,43 +311,22 @@ class _MontyIdeState extends State<MontyIde> {
       color: Theme.of(context).secondaryHeaderColor,
       child: Row(
         children: [
-          _TabButton(
-            label: 'EDITOR',
-            isActive: !_viewingAssistantBuffer,
-            onTap: () => setState(() => _viewingAssistantBuffer = false),
-          ),
-          _TabButton(
-            label: 'AI PILOT',
-            isActive: _viewingAssistantBuffer,
-            onTap: () => setState(() => _viewingAssistantBuffer = true),
-          ),
+          IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = false), icon: Icon(Icons.edit_note, color: !_viewingAssistantBuffer ? Colors.blue : Colors.grey), tooltip: 'Editor'),
+          IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = true), icon: Icon(Icons.bolt, color: _viewingAssistantBuffer ? Colors.purple : Colors.grey), tooltip: 'AI Pilot'),
           const Spacer(),
-          IconButton(
-            onPressed: () {
-              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-              unawaited(_handleSaveAs(code));
-            },
-            icon: const Icon(Icons.save_alt, color: Colors.blueGrey),
-            tooltip: 'Save As',
-          ),
-          IconButton(
-            onPressed: () {
-              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-              unawaited(_controller.typeCheck(code));
-            },
-            icon: const Icon(Icons.fact_check_outlined, color: Colors.blue),
-            tooltip: 'Type Check',
-          ),
-          IconButton(
-            onPressed: _handleRun,
-            icon: const Icon(Icons.play_arrow, color: Colors.green),
-            tooltip: 'Run',
-          ),
-          IconButton(
-            onPressed: () => setState(() => _showAssistant = !_showAssistant),
-            icon: const Icon(Icons.chat),
-            tooltip: 'Assistant',
-          ),
+          if (_isSaving) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: _handleRun, icon: const Icon(Icons.play_arrow, color: Colors.green, size: 20), tooltip: 'Run'),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () {
+            final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+            unawaited(_controller.typeCheck(code));
+          }, icon: const Icon(Icons.fact_check_outlined, color: Colors.blue, size: 20), tooltip: 'Type Check'),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () {
+            final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+            unawaited(_handleSaveAs(code));
+          }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As'),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showVariables = !_showVariables), icon: Icon(_showVariables ? Icons.account_tree : Icons.account_tree_outlined, color: _showVariables ? Colors.orange : null, size: 20), tooltip: 'Variables'),
+          IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
         ],
       ),
     );
@@ -262,24 +338,13 @@ class _MontyIdeState extends State<MontyIde> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Save As Python File'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(hintText: 'filename.py'),
-          autofocus: true,
-        ),
+        content: TextField(controller: nameController, decoration: const InputDecoration(hintText: 'filename.py'), autofocus: true),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, nameController.text),
-            child: const Text('Save'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, nameController.text), child: const Text('Save')),
         ],
       ),
     );
-
     if (name != null && name.isNotEmpty) {
       final String fileName = name.endsWith('.py') ? name : '$name.py';
       setState(() => _isSaving = true);
@@ -291,7 +356,7 @@ class _MontyIdeState extends State<MontyIde> {
           _editorController.text = code;
           _viewingAssistantBuffer = false;
         });
-      } on Exception catch (e) {
+      } catch (e) {
         debugPrint('Error saving: $e');
       } finally {
         if (mounted) setState(() => _isSaving = false);
@@ -301,9 +366,11 @@ class _MontyIdeState extends State<MontyIde> {
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _editorController.dispose();
     _assistantCodeController.dispose();
     _consoleStreamController.close();
+    _assistant.dispose();
     super.dispose();
   }
 }
@@ -323,6 +390,19 @@ class _TabButton extends StatelessWidget {
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isActive ? Colors.blue : Colors.transparent, width: 2))),
         child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isActive ? Colors.blue : Colors.grey)),
       ),
+    );
+  }
+}
+
+class _HorizontalResizer extends StatelessWidget {
+  const _HorizontalResizer({required this.onDrag, super.key});
+  final ValueChanged<double> onDrag;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
+      child: MouseRegion(cursor: SystemMouseCursors.resizeLeftRight, child: Container(width: 4, color: Theme.of(context).dividerColor.withAlpha(25))),
     );
   }
 }
