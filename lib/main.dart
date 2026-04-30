@@ -44,24 +44,29 @@ void main() async {
 
   final controller = MontyIdeController(extensionsFactory: extensionsFactory);
 
-  // Seed sample files
-  await vfs.writeFile(
+  // Seed sample files only if missing — never overwrite user edits.
+  final existing = (await vfs.listFiles()).toSet();
+  Future<void> seed(String path, String content) async {
+    if (existing.contains(path)) return;
+    await vfs.writeFile(path, content);
+  }
+
+  await seed(
     'hello.py',
     'def hi(name: str) -> str:\n    return f"hello {name}"\n\nprint(hi("Monty"))\n',
   );
-
-  await vfs.writeFile(
+  await seed(
     'examples/01_basics.py',
     'def welcome(name: str) -> str:\n'
         '    return f"Greetings, {name}!"\n\n'
         'print(welcome("Engineer"))\n',
   );
-  await vfs.writeFile(
+  await seed(
     'examples/02_logic.py',
     'numbers: list[int] = [1, 2, 3, 4, 5]\n'
         'print(f"Squares: {[n**2 for n in numbers]}")\n',
   );
-  await vfs.writeFile(
+  await seed(
     'examples/03_gui.py',
     'import json\n'
         'print("🎨 Updating Flutter widgets...")\n'
@@ -70,7 +75,7 @@ void main() async {
         'flutter_set_color("ide_run_button", "orange")\n'
         'print("Done.")\n',
   );
-  await vfs.writeFile(
+  await seed(
     'examples/05_gui_temp.py',
     '# Temperature converter — drag the slider or click a preset.\n'
         '# Open the "Monty UI" panel before running.\n'
@@ -112,7 +117,7 @@ void main() async {
         '\n'
         'print(f"Final: {round(celsius, 1)}°C")\n',
   );
-  await vfs.writeFile(
+  await seed(
     'examples/04_gui_counter.py',
     '# Open the "Monty UI" panel from the toolbar before running.\n'
         'count = 0\n'
@@ -145,6 +150,88 @@ void main() async {
         '        count = int(evt["value"])\n'
         '\n'
         'print(f"Final count: {count}")\n',
+  );
+  await seed(
+    'examples/06_thermostat.py',
+    'prompt_extend(\n'
+        '    "Thermostat: target temperature slider (10..32 °C), Heat / Cool / Off "\n'
+        '    "mode buttons, fan-speed slider (1..5), and a Step button that advances "\n'
+        '    "the simulated room temperature toward the target according to mode + "\n'
+        '    "fan speed. Help me iterate on the control logic, not the layout."\n'
+        ')\n'
+        '\n'
+        'target = 20.0\n'
+        'current = 18.0\n'
+        'mode = "off"\n'
+        'fan = 3\n'
+        'ticks = 0\n'
+        '\n'
+        'while True:\n'
+        '    delta = target - current\n'
+        '    abs_delta = delta if delta >= 0 else -delta\n'
+        '\n'
+        '    if abs_delta < 0.05:\n'
+        '        status = "✓ At target"\n'
+        '    elif mode == "heat" and current < target:\n'
+        '        status = "🔥 Heating"\n'
+        '    elif mode == "cool" and current > target:\n'
+        '        status = "❄️ Cooling"\n'
+        '    elif mode == "off":\n'
+        '        status = "⏸️ Off"\n'
+        '    else:\n'
+        '        status = "⏸️ Idle"\n'
+        '\n'
+        '    target_label = "Target: " + str(round(target, 1)) + " °C"\n'
+        '    current_label = "Current: " + str(round(current, 1)) + " °C"\n'
+        '    ticks_label = "Ticks: " + str(ticks)\n'
+        '\n'
+        '    el_emit({\n'
+        '        "type": "column",\n'
+        '        "children": [\n'
+        '            {"type": "text", "value": "🏠 Thermostat", "size": 18},\n'
+        '            {"type": "text", "value": target_label, "size": 14},\n'
+        '            {"type": "slider", "id": "target", "label": "Target",\n'
+        '             "min": 10, "max": 32, "value": target},\n'
+        '            {"type": "text", "value": current_label, "size": 14},\n'
+        '            {"type": "text", "value": status, "size": 14},\n'
+        '            {"type": "row", "children": [\n'
+        '                {"type": "button", "id": "heat", "label": "Heat"},\n'
+        '                {"type": "button", "id": "cool", "label": "Cool"},\n'
+        '                {"type": "button", "id": "off",  "label": "Off"},\n'
+        '                {"type": "button", "id": "step", "label": "Step ▶"},\n'
+        '            ]},\n'
+        '            {"type": "slider", "id": "fan", "label": "Fan speed",\n'
+        '             "min": 1, "max": 5, "value": fan},\n'
+        '            {"type": "text", "value": ticks_label, "size": 12},\n'
+        '        ],\n'
+        '    })\n'
+        '\n'
+        '    evt = el_recv()\n'
+        '    if evt["type"] == "quit":\n'
+        '        break\n'
+        '\n'
+        '    t = evt["target"]\n'
+        '    if t == "target":\n'
+        '        target = evt["value"]\n'
+        '    elif t == "fan":\n'
+        '        fan = int(evt["value"])\n'
+        '    elif t == "heat":\n'
+        '        mode = "heat"\n'
+        '    elif t == "cool":\n'
+        '        mode = "cool"\n'
+        '    elif t == "off":\n'
+        '        mode = "off"\n'
+        '    elif t == "step":\n'
+        '        ticks = ticks + 1\n'
+        '        rate = 0.2 * fan\n'
+        '        if mode == "heat" and current < target:\n'
+        '            current = current + rate\n'
+        '            if current > target:\n'
+        '                current = target\n'
+        '        elif mode == "cool" and current > target:\n'
+        '            current = current - rate\n'
+        '            if current < target:\n'
+        '                current = target\n',
   );
 
   final files = await vfs.listFiles();

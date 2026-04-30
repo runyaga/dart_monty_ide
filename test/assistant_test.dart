@@ -46,6 +46,18 @@ class MockToolHandler implements AssistantToolHandler {
   @override
   Future<Map<String, dynamic>> listFiles() async =>
       {'status': 'success', 'files': ['test.py']};
+
+  @override
+  Future<Map<String, dynamic>> uiState() async =>
+      {'status': 'success', 'tree': null, 'awaiting': false};
+
+  @override
+  Future<Map<String, dynamic>> uiDispatch({
+    required String target,
+    required String eventType,
+    Object? value,
+  }) async =>
+      {'status': 'success'};
 }
 
 void main() {

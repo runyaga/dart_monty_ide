@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dart_monty/dart_monty.dart';
+import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
@@ -80,6 +81,47 @@ class IdeToolHandler implements AssistantToolHandler {
       return {'status': 'success', 'files': files};
     } catch (e) {
       return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  EventLoopExtension? get _eventLoop {
+    final exts = ideController.extensions ?? const <MontyExtension>[];
+    for (final e in exts) {
+      if (e is EventLoopExtension) return e;
+    }
+    return null;
+  }
+
+  @override
+  Future<Map<String, dynamic>> uiState() async {
+    final el = _eventLoop;
+    if (el == null) {
+      return {'status': 'error', 'message': 'EventLoopExtension not registered'};
+    }
+    return <String, dynamic>{
+      'status': 'success',
+      'tree': el.lastEmitted,
+      'awaiting': el.isWaiting,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> uiDispatch({
+    required String target,
+    required String eventType,
+    Object? value,
+  }) async {
+    final el = _eventLoop;
+    if (el == null) {
+      return {'status': 'error', 'message': 'EventLoopExtension not registered'};
+    }
+    final event = <String, Object?>{'type': eventType, 'target': target};
+    if (value != null) event['value'] = value;
+    try {
+      el.dispatch(event);
+      return {'status': 'success', 'event': event};
+    } on StateError catch (e) {
+      return {'status': 'error', 'message': e.message, 'event': event};
     }
   }
 }

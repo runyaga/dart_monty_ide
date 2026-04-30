@@ -255,6 +255,16 @@ class AssistantController {
         return await toolHandler.readFile(path);
       } else if (call.name == 'list_files') {
         return await toolHandler.listFiles();
+      } else if (call.name == 'ui_state') {
+        return await toolHandler.uiState();
+      } else if (call.name == 'ui_dispatch') {
+        final target = (call.arguments['target'] as String?) ?? '';
+        final eventType = (call.arguments['event_type'] as String?) ?? 'click';
+        return await toolHandler.uiDispatch(
+          target: target,
+          eventType: eventType,
+          value: call.arguments['value'],
+        );
       }
     } catch (e) {
       return {'error': e.toString()};
@@ -319,6 +329,36 @@ class AssistantController {
       parameters: {
         'type': 'object',
         'properties': {},
+      },
+    ),
+    LlmTool(
+      name: 'ui_state',
+      description:
+          'Inspect the running Monty UI script: returns the latest widget '
+          'tree emitted via el_emit(), and whether Python is paused at '
+          'el_recv(). Use BEFORE ui_dispatch to see what ids exist and '
+          'their current values.',
+      parameters: {
+        'type': 'object',
+        'properties': {},
+      },
+    ),
+    LlmTool(
+      name: 'ui_dispatch',
+      description:
+          'Send an event into the running script\'s el_recv() queue, as if '
+          'the user clicked / dragged / typed in the panel. event_type is '
+          "typically 'click' (button), 'change' (slider/checkbox), 'submit' "
+          "(text_field), or 'quit'. Do NOT call this if no Monty UI script "
+          'is running — call ui_state first to confirm.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'target': {'type': 'string'},
+          'event_type': {'type': 'string'},
+          'value': {},
+        },
+        'required': ['target', 'event_type'],
       },
     ),
   ];

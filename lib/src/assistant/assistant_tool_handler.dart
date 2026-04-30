@@ -17,4 +17,19 @@ abstract interface class AssistantToolHandler {
 
   /// Lists files in the workspace.
   Future<Map<String, dynamic>> listFiles();
+
+  /// Returns the most recent widget tree emitted by the running script via
+  /// `el_emit(...)`, plus a flag indicating whether Python is currently
+  /// paused at `el_recv()`. Lets the Pilot see what's on screen before
+  /// dispatching events.
+  Future<Map<String, dynamic>> uiState();
+
+  /// Dispatches an event into the running script's `el_recv()` queue.
+  /// [eventType] is typically `click` (buttons), `change` (sliders/checkbox),
+  /// `submit` (text_field), or `quit` (close the loop).
+  Future<Map<String, dynamic>> uiDispatch({
+    required String target,
+    required String eventType,
+    Object? value,
+  });
 }

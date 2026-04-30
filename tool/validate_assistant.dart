@@ -29,6 +29,20 @@ class HeadlessToolHandler implements AssistantToolHandler {
   Future<Map<String, dynamic>> listFiles() async {
     return <String, dynamic>{'status': 'success', 'files': ['main.py']};
   }
+
+  @override
+  Future<Map<String, dynamic>> uiState() async {
+    return <String, dynamic>{'status': 'success', 'tree': null, 'awaiting': false};
+  }
+
+  @override
+  Future<Map<String, dynamic>> uiDispatch({
+    required String target,
+    required String eventType,
+    Object? value,
+  }) async {
+    return <String, dynamic>{'status': 'success'};
+  }
 }
 
 void main() async {

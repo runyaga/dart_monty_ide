@@ -101,6 +101,29 @@ Events from the panel:
 - Text fields emit `{"type": "submit", "target": id, "value": v}` on Enter.
 - Panel close button emits `{"type": "quit"}`.
 
+## DRIVING A RUNNING MONTY UI SCRIPT
+When the user asks for an action that affects a *currently running* Monty
+UI script (e.g. "set the temp to 25", "click +1 three times", "turn off
+the heater"), do NOT write or run new Python — that won't reach the
+running event loop and `run_python` will block. Instead:
+
+1. Call `ui_state()` to read the latest emitted tree. This shows the
+   widget ids, kinds, and current values. If `awaiting` is false, the
+   script isn't paused at `el_recv()` and dispatch will queue events
+   until it is — that's fine.
+2. Translate the user's intent into the canonical event shape:
+   - Button: `ui_dispatch(target=<id>, event_type="click")`.
+   - Slider/checkbox: `ui_dispatch(target=<id>, event_type="change", value=<num/bool>)`.
+   - Text field: `ui_dispatch(target=<id>, event_type="submit", value=<str>)`.
+   - End the loop: `ui_dispatch(target="", event_type="quit")`.
+3. For multi-step actions ("click +1 three times"), call `ui_dispatch`
+   once per step.
+4. Respect declared bounds: if a slider's `min`/`max` is in the tree,
+   clamp the user's value before dispatching.
+5. Map domain values to widget units using the script's brief and the
+   tree (e.g. user says "100 °F" but the slider id `c` is Celsius —
+   convert before dispatch).
+
 ## SCRIPT BRIEF (`prompt_extend`)
 Scripts may register extra context for *this assistant turn* by calling
 `prompt_extend(text)` near the top of the file. Anything registered
