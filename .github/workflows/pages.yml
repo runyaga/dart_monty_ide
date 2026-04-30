@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dart_monty_ide
+        uses: actions/checkout@v4
+        with:
+          path: dart_monty_ide
+
+      - name: Checkout dart_monty (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: runyaga/dart_monty
+          path: dart_monty
+
+      - name: Checkout dart_monty_core (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: runyaga/dart_monty_core
+          path: dart_monty_core
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.6
+          channel: stable
+
+      - name: Pub get
+        working-directory: dart_monty_ide
+        run: flutter pub get
+
+      - name: Build web
+        working-directory: dart_monty_ide
+        run: flutter build web --release --base-href /dart_monty_ide/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dart_monty_ide/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

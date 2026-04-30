@@ -1,17 +1,22 @@
 # dart_monty_ide
 
-A new Flutter project.
+A Flutter IDE for the [dart_monty](https://github.com/runyaga/dart_monty)
+sandboxed Python interpreter, with an AI Pilot, a live Monty UI panel
+driven by Python via `el_emit` / `el_recv`, and a layered system prompt
+that auto-documents whatever extensions are loaded.
 
-## Getting Started
+**Live web build:** https://runyaga.github.io/dart_monty_ide/
 
-This project is a starting point for a Flutter application.
+## Docs
 
-A few resources to get you started if this is your first Flutter project:
+- [Monty UI panel & layered prompt](docs/monty_ui.md)
+- [Web build & GitHub Pages deployment](docs/web_deploy.md)
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Local dev
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run -d macos    # or -d chrome / -d windows / -d linux
+```
+
+The repo expects `dart_monty` and `dart_monty_core` as siblings (see
+`pubspec.yaml` `path:` deps).
