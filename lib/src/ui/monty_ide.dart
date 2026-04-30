@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/assistant.dart';
 import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
@@ -9,6 +10,7 @@ import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
+import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
 import 'package:dart_monty_ide/src/ui/variable_inspector.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
@@ -21,12 +23,14 @@ class MontyIde extends StatefulWidget {
     required this.vfs,
     this.controller,
     this.registry,
+    this.eventLoop,
     super.key,
   });
 
   final MontyVfs vfs;
   final MontyIdeController? controller;
   final WidgetRegistry? registry;
+  final EventLoopExtension? eventLoop;
 
   @override
   State<MontyIde> createState() => _MontyIdeState();
@@ -43,12 +47,14 @@ class _MontyIdeState extends State<MontyIde> {
   bool _showAssistant = true;
   bool _showExternals = false;
   bool _showVariables = false;
+  bool _showUiPanel = false;
   bool _viewingAssistantBuffer = false;
-  
+
   double _explorerWidth = 200;
   double _assistantWidth = 400;
   double _externalsWidth = 300;
   double _variablesWidth = 250;
+  double _uiPanelWidth = 320;
 
   int _fileExplorerVersion = 0;
   final StreamController<String> _consoleStreamController = StreamController<String>.broadcast();
@@ -315,6 +321,24 @@ class _MontyIdeState extends State<MontyIde> {
             ),
           ),
         ],
+        if (_showUiPanel && widget.eventLoop != null) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _uiPanelWidth -= delta;
+                if (_uiPanelWidth < 200) _uiPanelWidth = 200;
+                if (_uiPanelWidth > 600) _uiPanelWidth = 600;
+              });
+            },
+          ),
+          SizedBox(
+            width: _uiPanelWidth,
+            child: MontyUiPanel(
+              eventLoop: widget.eventLoop!,
+              onClose: () => setState(() => _showUiPanel = false),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -343,6 +367,17 @@ class _MontyIdeState extends State<MontyIde> {
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showVariables = !_showVariables), icon: Icon(_showVariables ? Icons.account_tree : Icons.account_tree_outlined, color: _showVariables ? Colors.orange : null, size: 20), tooltip: 'Variables'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
+            if (widget.eventLoop != null)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _showUiPanel = !_showUiPanel),
+                icon: Icon(
+                  _showUiPanel ? Icons.smart_display : Icons.smart_display_outlined,
+                  color: _showUiPanel ? Colors.purple : null,
+                  size: 20,
+                ),
+                tooltip: 'Monty UI Panel',
+              ),
           ],
         ),
       ),

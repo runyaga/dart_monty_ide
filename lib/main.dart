@@ -1,3 +1,4 @@
+import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/dart_monty_ide.dart';
 import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
 import 'package:dart_monty_ide/src/bridge/flutter_extension.dart';
@@ -24,7 +25,10 @@ void main() async {
   // Setup Flutter Bridge
   final registry = WidgetRegistry();
   final flutterExtension = MontyFlutterExtension(registry);
-  final controller = MontyIdeController(extensions: [flutterExtension]);
+  final eventLoopExtension = EventLoopExtension();
+  final controller = MontyIdeController(
+    extensions: [flutterExtension, eventLoopExtension],
+  );
 
   // Seed sample files
   await vfs.writeFile(
@@ -52,6 +56,77 @@ void main() async {
         'flutter_set_color("ide_run_button", "orange")\n'
         'print("Done.")\n',
   );
+  await vfs.writeFile(
+    'examples/05_gui_temp.py',
+    '# Temperature converter — drag the slider or click a preset.\n'
+        '# Open the "Monty UI" panel before running.\n'
+        'celsius = 20.0\n'
+        '\n'
+        'while True:\n'
+        '    fahrenheit = celsius * 9 / 5 + 32\n'
+        '    kelvin = celsius + 273.15\n'
+        '    el_emit({\n'
+        '        "type": "column",\n'
+        '        "children": [\n'
+        '            {"type": "text", "value": "🌡️  Temperature Converter", "size": 18},\n'
+        '            {"type": "slider", "id": "c", "label": "Celsius", "min": -50, "max": 150, "value": celsius},\n'
+        '            {"type": "text", "value": f"{round(celsius, 1)}°C  =  {round(fahrenheit, 1)}°F  =  {round(kelvin, 1)} K", "size": 14},\n'
+        '            {"type": "row", "children": [\n'
+        '                {"type": "button", "id": "freeze", "label": "Freezing (0°C)"},\n'
+        '                {"type": "button", "id": "body", "label": "Body (37°C)"},\n'
+        '                {"type": "button", "id": "boil", "label": "Boiling (100°C)"},\n'
+        '            ]},\n'
+        '        ],\n'
+        '    })\n'
+        '    evt = el_recv()\n'
+        '    if evt["type"] == "quit":\n'
+        '        break\n'
+        '    target = evt["target"]\n'
+        '    if target == "c":\n'
+        '        celsius = evt["value"]\n'
+        '    elif target == "freeze":\n'
+        '        celsius = 0.0\n'
+        '    elif target == "body":\n'
+        '        celsius = 37.0\n'
+        '    elif target == "boil":\n'
+        '        celsius = 100.0\n'
+        '\n'
+        'print(f"Final: {round(celsius, 1)}°C")\n',
+  );
+  await vfs.writeFile(
+    'examples/04_gui_counter.py',
+    '# Open the "Monty UI" panel from the toolbar before running.\n'
+        'count = 0\n'
+        '\n'
+        'while True:\n'
+        '    el_emit({\n'
+        '        "type": "column",\n'
+        '        "children": [\n'
+        '            {"type": "text", "value": "Monty UI Counter", "size": 18},\n'
+        '            {"type": "text", "value": f"Count: {count}"},\n'
+        '            {"type": "row", "children": [\n'
+        '                {"type": "button", "id": "inc", "label": "+1"},\n'
+        '                {"type": "button", "id": "dec", "label": "-1"},\n'
+        '                {"type": "button", "id": "reset", "label": "Reset"},\n'
+        '            ]},\n'
+        '            {"type": "slider", "id": "speed", "label": "Set", "min": 0, "max": 100, "value": count},\n'
+        '        ],\n'
+        '    })\n'
+        '    evt = el_recv()\n'
+        '    if evt["type"] == "quit":\n'
+        '        break\n'
+        '    target = evt["target"]\n'
+        '    if target == "inc":\n'
+        '        count = count + 1\n'
+        '    elif target == "dec":\n'
+        '        count = count - 1\n'
+        '    elif target == "reset":\n'
+        '        count = 0\n'
+        '    elif target == "speed":\n'
+        '        count = int(evt["value"])\n'
+        '\n'
+        'print(f"Final count: {count}")\n',
+  );
 
   final files = await vfs.listFiles();
   bool shouldUpdate = !files.contains('system_prompt.txt');
@@ -66,7 +141,12 @@ void main() async {
     await vfs.writeFile('system_prompt.txt', defaultAssistantPrompt);
   }
 
-  runApp(MyApp(vfs: vfs, controller: controller, registry: registry));
+  runApp(MyApp(
+    vfs: vfs,
+    controller: controller,
+    registry: registry,
+    eventLoop: eventLoopExtension,
+  ));
 }
 
 /// The main application widget.
@@ -76,6 +156,7 @@ class MyApp extends StatelessWidget {
     required this.vfs,
     required this.controller,
     required this.registry,
+    required this.eventLoop,
     super.key,
   });
 
@@ -88,6 +169,9 @@ class MyApp extends StatelessWidget {
   /// The widget registry for the bridge.
   final WidgetRegistry registry;
 
+  /// The event-loop extension that powers the Monty UI panel.
+  final EventLoopExtension eventLoop;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -97,7 +181,12 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: MyHomePage(vfs: vfs, controller: controller, registry: registry),
+      home: MyHomePage(
+        vfs: vfs,
+        controller: controller,
+        registry: registry,
+        eventLoop: eventLoop,
+      ),
     );
   }
 }
@@ -109,6 +198,7 @@ class MyHomePage extends StatelessWidget {
     required this.vfs,
     required this.controller,
     required this.registry,
+    required this.eventLoop,
     super.key,
   });
 
@@ -120,6 +210,9 @@ class MyHomePage extends StatelessWidget {
 
   /// The widget registry for the bridge.
   final WidgetRegistry registry;
+
+  /// The event-loop extension that powers the Monty UI panel.
+  final EventLoopExtension eventLoop;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +225,7 @@ class MyHomePage extends StatelessWidget {
         vfs: vfs,
         controller: controller,
         registry: registry,
+        eventLoop: eventLoop,
       ),
     );
   }
