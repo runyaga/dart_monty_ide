@@ -64,6 +64,7 @@ class ChatPanel extends StatefulWidget {
     required this.onTemperatureChanged,
     this.onClearChat,
     this.debugLog = '',
+    this.ollamaReachable,
     super.key,
   });
 
@@ -80,6 +81,11 @@ class ChatPanel extends StatefulWidget {
   final double temperature;
   final ValueChanged<double> onTemperatureChanged;
   final String debugLog;
+
+  /// Tri-state reachability: `null` = not yet probed, `true` = healthy,
+  /// `false` = unreachable (CORS, not running, or wrong origin). The
+  /// banner only shows when `false`.
+  final bool? ollamaReachable;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -206,6 +212,7 @@ class _ChatPanelState extends State<ChatPanel> {
               ),
             ),
           ),
+        if (widget.ollamaReachable == false) _OllamaUnreachableBanner(),
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
@@ -351,6 +358,61 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
             ),
           ),
           Container(padding: const EdgeInsets.all(8), color: Colors.black87, child: Text(text, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12))),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown above the chat input when the Pilot can't reach Ollama. Most
+/// commonly the user hasn't set `OLLAMA_ORIGINS` (CORS), or Ollama isn't
+/// running. The browser refuses to tell us which one, so we link to
+/// the README setup walkthrough.
+class _OllamaUnreachableBanner extends StatelessWidget {
+  static const _setupUrl =
+      'https://github.com/runyaga/dart_monty_ide#connecting-the-ai-pilot';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.amber.shade100,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Can't reach Ollama at http://localhost:11434",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade900,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Make sure Ollama is running and OLLAMA_ORIGINS allows '
+                  "this page's origin. Setup walkthrough:",
+                  style: TextStyle(color: Colors.brown.shade900, fontSize: 11),
+                ),
+                const SizedBox(height: 2),
+                SelectableText(
+                  _setupUrl,
+                  style: TextStyle(
+                    color: Colors.blue.shade900,
+                    fontSize: 11,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

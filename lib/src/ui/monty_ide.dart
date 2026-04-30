@@ -15,6 +15,7 @@ import 'package:dart_monty_ide/src/ui/monty_editor.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:re_editor/re_editor.dart';
 
 /// A full-featured Python IDE widget with file management and Flutter Bridge.
@@ -82,6 +83,15 @@ class _MontyIdeState extends State<MontyIde> {
   double _assistantTemperature = 0.1;
   String _assistantDebugLog = '';
 
+  /// Tri-state Ollama reachability — null until the first probe completes.
+  bool? _ollamaReachable;
+
+  /// Debounced "script running" banner state. We only flip this after the
+  /// run has been in flight for >500ms so fast scripts (hello.py-style)
+  /// don't flash the banner on every Run.
+  bool _showRunBanner = false;
+  Timer? _runBannerDelay;
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +102,22 @@ class _MontyIdeState extends State<MontyIde> {
     
     _initAssistant();
     unawaited(_initController());
+    unawaited(_probeOllama());
+  }
+
+  /// Best-effort probe so the chat panel can show a banner when the Pilot
+  /// can't reach Ollama. We use `/api/tags` (a simple GET — no preflight)
+  /// because if it succeeds we know origin + CORS + reachability are all
+  /// fine. Any failure (network, CORS, 5xx) falls through to "unreachable".
+  Future<void> _probeOllama() async {
+    try {
+      final resp = await http
+          .get(Uri.parse('http://localhost:11434/api/tags'))
+          .timeout(const Duration(seconds: 3));
+      if (mounted) setState(() => _ollamaReachable = resp.statusCode < 500);
+    } catch (_) {
+      if (mounted) setState(() => _ollamaReachable = false);
+    }
   }
 
   void _initAssistant() {
@@ -147,6 +173,22 @@ class _MontyIdeState extends State<MontyIde> {
           );
         });
       }
+    }
+    // Debounce the "script running" banner: only show if a run has been
+    // in flight for >500ms.
+    if (_controller.isExecuting) {
+      if (!_showRunBanner && _runBannerDelay == null) {
+        _runBannerDelay = Timer(const Duration(milliseconds: 500), () {
+          _runBannerDelay = null;
+          if (mounted && _controller.isExecuting) {
+            setState(() => _showRunBanner = true);
+          }
+        });
+      }
+    } else {
+      _runBannerDelay?.cancel();
+      _runBannerDelay = null;
+      _showRunBanner = false;
     }
     // Trigger a rebuild so _eventLoop / _promptExtension getters re-resolve
     // after Reset Interpreter swapped in fresh extension instances.
@@ -210,10 +252,13 @@ class _MontyIdeState extends State<MontyIde> {
 
     try {
       await _assistant.processPrompt(prompt, context: context);
+      if (mounted) setState(() => _ollamaReachable = true);
     } catch (e) {
       setState(() => _assistantMessages.add(ChatMessage(role: 'assistant', content: 'Error: $e')));
     } finally {
       if (mounted) setState(() => _isAssistantStreaming = false);
+      // Re-probe so the banner clears (or appears) without restart.
+      unawaited(_probeOllama());
     }
   }
 
@@ -255,6 +300,7 @@ class _MontyIdeState extends State<MontyIde> {
           child: Column(
             children: [
               _buildToolbar(),
+              if (_showRunBanner) _buildScriptRunningBanner(),
               Expanded(
                 flex: 2,
                 child: _viewingAssistantBuffer
@@ -301,6 +347,7 @@ class _MontyIdeState extends State<MontyIde> {
               isStreaming: _isAssistantStreaming,
               onSendMessage: _handleAssistantSendMessage,
               onStop: _handleAssistantStop,
+              ollamaReachable: _ollamaReachable,
               temperature: _assistantTemperature,
               onTemperatureChanged: (v) => setState(() => _assistantTemperature = v),
               debugLog: _assistantDebugLog,
@@ -352,6 +399,58 @@ class _MontyIdeState extends State<MontyIde> {
           ),
         ],
       ],
+    );
+  }
+
+  /// Shown when a script is mid-execution. For event-loop scripts (which
+  /// block forever on `el_recv`) this is the *only* visible signal that
+  /// the bridge is locked, so a fresh Run on a different file silently
+  /// fails. Surfaces the state + a one-click Reset.
+  Widget _buildScriptRunningBanner() {
+    final eventLoopActive =
+        _eventLoop?.isWaiting == true || _eventLoop?.lastEmitted != null;
+    final message = eventLoopActive
+        ? 'Event-loop script is running. New runs are blocked until you reset.'
+        : 'A script is running.';
+    return Material(
+      color: Colors.amber.shade100,
+      child: InkWell(
+        onTap: _controller.clearState,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.orange.shade800),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: Colors.brown.shade900, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _controller.clearState,
+                icon: const Icon(Icons.restart_alt, size: 16),
+                label: const Text('Reset'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -436,6 +535,7 @@ class _MontyIdeState extends State<MontyIde> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _runBannerDelay?.cancel();
     _editorController.dispose();
     _assistantCodeController.dispose();
     _consoleStreamController.close();
