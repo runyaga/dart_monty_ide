@@ -108,15 +108,29 @@ class _MontyIdeState extends State<MontyIde> {
   /// Best-effort probe so the chat panel can show a banner when the Pilot
   /// can't reach Ollama. We use `/api/tags` (a simple GET — no preflight)
   /// because if it succeeds we know origin + CORS + reachability are all
-  /// fine. Any failure (network, CORS, 5xx) falls through to "unreachable".
-  Future<void> _probeOllama() async {
+  /// fine.
+  ///
+  /// Failures retry with backoff up to [maxAttempts] times before flipping
+  /// `_ollamaReachable` to `false` — early failures are common (browser
+  /// private-network-access prompt still up, Ollama still starting,
+  /// transient CORS preflight cache) and shouldn't immediately scare the
+  /// user with a banner.
+  Future<void> _probeOllama({int attempt = 1, int maxAttempts = 4}) async {
     try {
       final resp = await http
           .get(Uri.parse('http://localhost:11434/api/tags'))
           .timeout(const Duration(seconds: 3));
       if (mounted) setState(() => _ollamaReachable = resp.statusCode < 500);
     } catch (_) {
-      if (mounted) setState(() => _ollamaReachable = false);
+      if (attempt < maxAttempts) {
+        // 2s, 4s, 6s = ~12s grace before the banner appears.
+        await Future<void>.delayed(Duration(seconds: 2 * attempt));
+        if (mounted) {
+          await _probeOllama(attempt: attempt + 1, maxAttempts: maxAttempts);
+        }
+      } else if (mounted) {
+        setState(() => _ollamaReachable = false);
+      }
     }
   }
 

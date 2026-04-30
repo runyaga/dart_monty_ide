@@ -26,6 +26,7 @@ dependencies:
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
   rxdart: ^0.28.0
+  url_launcher: ^6.3.0
 
 dependency_overrides:
   dart_monty_core:

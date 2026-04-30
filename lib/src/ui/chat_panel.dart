@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:rxdart/rxdart.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// A message in the chat.
 class ChatMessage {
@@ -212,7 +213,8 @@ class _ChatPanelState extends State<ChatPanel> {
               ),
             ),
           ),
-        if (widget.ollamaReachable == false) _OllamaUnreachableBanner(),
+        if (widget.ollamaReachable == false) _OllamaUnreachableBanner()
+        else if (widget.ollamaReachable == null) _OllamaProbingBanner(),
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
@@ -365,12 +367,17 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
 }
 
 /// Shown above the chat input when the Pilot can't reach Ollama. Most
-/// commonly the user hasn't set `OLLAMA_ORIGINS` (CORS), or Ollama isn't
-/// running. The browser refuses to tell us which one, so we link to
-/// the README setup walkthrough.
+/// commonly the user hasn't set `OLLAMA_ORIGINS` (CORS), denied a
+/// browser network-permission prompt, or Ollama isn't running. Links
+/// to the README setup walkthrough; opens in a new tab.
 class _OllamaUnreachableBanner extends StatelessWidget {
   static const _setupUrl =
       'https://github.com/runyaga/dart_monty_ide#connecting-the-ai-pilot';
+
+  Future<void> _open() async {
+    final uri = Uri.parse(_setupUrl);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -398,19 +405,61 @@ class _OllamaUnreachableBanner extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Make sure Ollama is running and OLLAMA_ORIGINS allows '
-                  "this page's origin. Setup walkthrough:",
+                  "this page's origin. If your browser asked for network "
+                  'permission, allow it.',
                   style: TextStyle(color: Colors.brown.shade900, fontSize: 11),
                 ),
-                const SizedBox(height: 2),
-                SelectableText(
-                  _setupUrl,
-                  style: TextStyle(
-                    color: Colors.blue.shade900,
-                    fontSize: 11,
-                    decoration: TextDecoration.underline,
+                const SizedBox(height: 4),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _open,
+                    child: Text(
+                      'Setup walkthrough →',
+                      style: TextStyle(
+                        color: Colors.blue.shade900,
+                        fontSize: 11,
+                        decoration: TextDecoration.underline,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Soft, transient version of [_OllamaUnreachableBanner] shown while the
+/// initial probe is still retrying — tells the user to allow any browser
+/// network-permission prompt without flatly declaring failure.
+class _OllamaProbingBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.blueGrey.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(Colors.blueGrey.shade700),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Connecting to Ollama… If your browser asked for network '
+              'permission, please allow it.',
+              style: TextStyle(color: Colors.blueGrey.shade800, fontSize: 11),
             ),
           ),
         ],
