@@ -28,5 +28,12 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Disable Flutter 3.41's experimental merged UI/platform thread on macOS.
+	     With it on, focus / window-foreground races produce repeating
+	     `_pressedKeys.containsKey` assertions and "Failed to foreground app"
+	     warnings when the editor, chat, and Monty UI panels hold focus nodes
+	     simultaneously. -->
+	<key>FLTEnableMergedPlatformUIThread</key>
+	<false/>
 </dict>
 </plist>

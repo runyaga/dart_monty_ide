@@ -13,7 +13,6 @@ import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
-import 'package:dart_monty_ide/src/ui/variable_inspector.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
@@ -65,14 +64,12 @@ class _MontyIdeState extends State<MontyIde> {
   bool _isSaving = false;
   bool _showAssistant = true;
   bool _showExternals = false;
-  bool _showVariables = false;
   bool _showUiPanel = false;
   bool _viewingAssistantBuffer = false;
 
   double _explorerWidth = 200;
   double _assistantWidth = 400;
   double _externalsWidth = 300;
-  double _variablesWidth = 250;
   double _uiPanelWidth = 320;
 
   int _fileExplorerVersion = 0;
@@ -319,23 +316,6 @@ class _MontyIdeState extends State<MontyIde> {
             ),
           ),
         ],
-        if (_showVariables) ...[
-          _HorizontalResizer(
-            onDrag: (delta) {
-              setState(() {
-                _variablesWidth -= delta;
-                if (_variablesWidth < 150) _variablesWidth = 150;
-              });
-            },
-          ),
-          SizedBox(
-            width: _variablesWidth,
-            child: VariableInspector(
-              controller: _controller,
-              onClose: () => setState(() => _showVariables = false),
-            ),
-          ),
-        ],
         if (_showExternals) ...[
           _HorizontalResizer(
             onDrag: (delta) {
@@ -397,7 +377,6 @@ class _MontyIdeState extends State<MontyIde> {
               unawaited(_handleSaveAs(code));
             }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
-            IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showVariables = !_showVariables), icon: Icon(_showVariables ? Icons.account_tree : Icons.account_tree_outlined, color: _showVariables ? Colors.orange : null, size: 20), tooltip: 'Variables'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
             if (_eventLoop != null)
               IconButton(

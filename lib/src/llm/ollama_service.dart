@@ -1,12 +1,34 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:ollama_dart/ollama_dart.dart';
+
+/// HTTP client that strips `X-Request-ID` before sending. ollama_dart's
+/// LoggingInterceptor adds the header by default, but Ollama's CORS
+/// preflight does NOT include `X-Request-ID` in `Access-Control-Allow-Headers`,
+/// so browsers reject the actual request. Stripping it preserves correct
+/// behavior on web while leaving native unaffected.
+class _StripRequestIdClient extends http.BaseClient {
+  _StripRequestIdClient(this._inner);
+  final http.Client _inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.headers.remove('X-Request-ID');
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
+}
 
 /// Implementation of [LlmService] using the Ollama local API.
 class OllamaLlmService implements LlmService {
   void _log(String text) {
-    stderr.writeln('OLLAMA: $text');
+    // debugPrint works on every platform (incl. browser); stderr would
+    // throw `StdIOUtils._getStdioOutputStream` on web.
+    debugPrint('OLLAMA: $text');
   }
 
   @override
@@ -17,6 +39,7 @@ class OllamaLlmService implements LlmService {
   }) {
     final client = OllamaClient(
       config: OllamaConfig(baseUrl: config.baseUrl),
+      httpClient: _StripRequestIdClient(http.Client()),
     );
     final controller = StreamController<LlmResponseChunk>();
 
