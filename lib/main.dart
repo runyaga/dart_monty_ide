@@ -1,7 +1,9 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/dart_monty_ide.dart';
 import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
+import 'package:dart_monty_ide/src/assistant/system_prompt_builder.dart';
 import 'package:dart_monty_ide/src/bridge/flutter_extension.dart';
+import 'package:dart_monty_ide/src/bridge/prompt_extension.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/vfs/local_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/memory_vfs.dart';
@@ -22,13 +24,25 @@ void main() async {
     vfs = LocalMontyVfs(rootPath: workspacePath);
   }
 
-  // Setup Flutter Bridge
+  // Setup Flutter Bridge.
+  // The WidgetRegistry is durable (UI state across runs); extension instances
+  // are recreated by the factory on each clearState(), because some — e.g.
+  // EventLoopExtension — are one-shot and cannot be reused after dispose.
   final registry = WidgetRegistry();
-  final flutterExtension = MontyFlutterExtension(registry);
-  final eventLoopExtension = EventLoopExtension();
-  final controller = MontyIdeController(
-    extensions: [flutterExtension, eventLoopExtension],
-  );
+  List<MontyExtension> extensionsFactory() {
+    final flutterExt = MontyFlutterExtension(registry);
+    final eventLoopExt = EventLoopExtension();
+    final promptExt = MontyPromptExtension();
+    final exts = <MontyExtension>[flutterExt, eventLoopExt, promptExt];
+    promptExt.snapshotBuilder = () => buildSystemPrompt(
+          basePrompt: defaultAssistantPrompt,
+          extensions: exts,
+          scriptFragments: promptExt.fragments,
+        );
+    return exts;
+  }
+
+  final controller = MontyIdeController(extensionsFactory: extensionsFactory);
 
   // Seed sample files
   await vfs.writeFile(
@@ -60,6 +74,11 @@ void main() async {
     'examples/05_gui_temp.py',
     '# Temperature converter — drag the slider or click a preset.\n'
         '# Open the "Monty UI" panel before running.\n'
+        'prompt_extend(\n'
+        '    "Script: Temperature converter using a Celsius slider (-50..150) "\n'
+        '    "and freeze/body/boil preset buttons. Show °C, °F, K side-by-side. "\n'
+        '    "Quit handler is wired. Help me iterate on logic, not layout."\n'
+        ')\n'
         'celsius = 20.0\n'
         '\n'
         'while True:\n'
@@ -145,7 +164,6 @@ void main() async {
     vfs: vfs,
     controller: controller,
     registry: registry,
-    eventLoop: eventLoopExtension,
   ));
 }
 
@@ -156,21 +174,19 @@ class MyApp extends StatelessWidget {
     required this.vfs,
     required this.controller,
     required this.registry,
-    required this.eventLoop,
     super.key,
   });
 
   /// The VFS instance.
   final MontyVfs vfs;
 
-  /// The Monty IDE controller.
+  /// The Monty IDE controller. The current extension instances are
+  /// resolved live from `controller.extensions` so they can be swapped on
+  /// Reset Interpreter.
   final MontyIdeController controller;
 
-  /// The widget registry for the bridge.
+  /// The widget registry for the bridge (durable across runs).
   final WidgetRegistry registry;
-
-  /// The event-loop extension that powers the Monty UI panel.
-  final EventLoopExtension eventLoop;
 
   @override
   Widget build(BuildContext context) {
@@ -181,12 +197,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: MyHomePage(
-        vfs: vfs,
-        controller: controller,
-        registry: registry,
-        eventLoop: eventLoop,
-      ),
+      home: MyHomePage(vfs: vfs, controller: controller, registry: registry),
     );
   }
 }
@@ -198,7 +209,6 @@ class MyHomePage extends StatelessWidget {
     required this.vfs,
     required this.controller,
     required this.registry,
-    required this.eventLoop,
     super.key,
   });
 
@@ -210,9 +220,6 @@ class MyHomePage extends StatelessWidget {
 
   /// The widget registry for the bridge.
   final WidgetRegistry registry;
-
-  /// The event-loop extension that powers the Monty UI panel.
-  final EventLoopExtension eventLoop;
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +232,6 @@ class MyHomePage extends StatelessWidget {
         vfs: vfs,
         controller: controller,
         registry: registry,
-        eventLoop: eventLoop,
       ),
     );
   }

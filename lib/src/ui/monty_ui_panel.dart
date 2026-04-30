@@ -24,8 +24,23 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
   @override
   void initState() {
     super.initState();
-    _tree = widget.eventLoop.lastEmitted;
-    _unsubscribe = widget.eventLoop.lastEmittedSignal.subscribe((value) {
+    _attach(widget.eventLoop);
+  }
+
+  @override
+  void didUpdateWidget(covariant MontyUiPanel old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.eventLoop, widget.eventLoop)) {
+      // Reset Interpreter swapped in a fresh EventLoopExtension; re-subscribe
+      // and clear the stale tree so the panel goes empty.
+      _unsubscribe?.call();
+      _attach(widget.eventLoop);
+    }
+  }
+
+  void _attach(EventLoopExtension ext) {
+    _tree = ext.lastEmitted;
+    _unsubscribe = ext.lastEmittedSignal.subscribe((value) {
       if (!mounted) return;
       setState(() => _tree = value);
     });

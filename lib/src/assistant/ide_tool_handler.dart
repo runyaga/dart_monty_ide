@@ -21,27 +21,12 @@ class IdeToolHandler implements AssistantToolHandler {
 
   @override
   Future<Map<String, dynamic>> typeCheck(String code) async {
-    // 1. Syntax check
-    try {
-      final runtime = MontyRuntime(extensions: ideController.extensions);
-      final handle = await runtime.execute('${code.trim()}\n');
-      await handle.result;
-      await runtime.dispose();
-    } on MontySyntaxError catch (e) {
-      return <String, dynamic>{
-        'ok': false,
-        'errors': [
-          <String, dynamic>{
-            'line': e.exception?.lineNumber,
-            'code': 'syntax-error',
-            'message': e.message,
-          }
-        ],
-      };
-    }
-
-    // 2. Type check
-    final errors = await Monty.typeCheck(code);
+    // Pure static analysis via Monty.typeCheck — no runtime, no execution.
+    // Safe on scripts with infinite event loops (el_recv). Host function
+    // stubs are passed as prefixCode so calls like el_emit/prompt_extend
+    // resolve.
+    final prefix = MontyIdeController.buildHostStubs(ideController.extensions);
+    final errors = await Monty.typeCheck(code, prefixCode: prefix);
     if (errors.isEmpty) {
       return <String, dynamic>{'ok': true, 'errors': []};
     }

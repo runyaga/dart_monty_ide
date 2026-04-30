@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/assistant.dart';
 import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
+import 'package:dart_monty_ide/src/assistant/system_prompt_builder.dart';
+import 'package:dart_monty_ide/src/bridge/prompt_extension.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
@@ -23,14 +25,12 @@ class MontyIde extends StatefulWidget {
     required this.vfs,
     this.controller,
     this.registry,
-    this.eventLoop,
     super.key,
   });
 
   final MontyVfs vfs;
   final MontyIdeController? controller;
   final WidgetRegistry? registry;
-  final EventLoopExtension? eventLoop;
 
   @override
   State<MontyIde> createState() => _MontyIdeState();
@@ -38,6 +38,25 @@ class MontyIde extends StatefulWidget {
 
 class _MontyIdeState extends State<MontyIde> {
   late final MontyIdeController _controller;
+
+  /// Resolved live from `_controller.extensions` so a Reset Interpreter
+  /// (which swaps in fresh instances) is picked up automatically on the
+  /// next rebuild.
+  EventLoopExtension? get _eventLoop {
+    final exts = _controller.extensions ?? const <MontyExtension>[];
+    for (final e in exts) {
+      if (e is EventLoopExtension) return e;
+    }
+    return null;
+  }
+
+  MontyPromptExtension? get _promptExtension {
+    final exts = _controller.extensions ?? const <MontyExtension>[];
+    for (final e in exts) {
+      if (e is MontyPromptExtension) return e;
+    }
+    return null;
+  }
   final CodeLineEditingController _editorController = CodeLineEditingController();
   final CodeLineEditingController _assistantCodeController = CodeLineEditingController();
   final GlobalKey<MontyEditorState> _editorKey = GlobalKey<MontyEditorState>();
@@ -89,7 +108,7 @@ class _MontyIdeState extends State<MontyIde> {
         model: 'gpt-oss:20b',
         temperature: _assistantTemperature,
       ),
-      systemPrompt: defaultAssistantPrompt,
+      systemPromptBuilder: _buildSystemPrompt,
     );
 
     _assistant.events.listen((event) {
@@ -132,6 +151,9 @@ class _MontyIdeState extends State<MontyIde> {
         });
       }
     }
+    // Trigger a rebuild so _eventLoop / _promptExtension getters re-resolve
+    // after Reset Interpreter swapped in fresh extension instances.
+    if (mounted) setState(() {});
   }
 
   Timer? _saveTimer;
@@ -172,6 +194,8 @@ class _MontyIdeState extends State<MontyIde> {
 
   void _handleRun() {
     final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+    // Each Run is a fresh take — drop any prompt fragments the prior script registered.
+    _promptExtension?.clear();
     unawaited(_controller.execute(code));
   }
 
@@ -200,6 +224,14 @@ class _MontyIdeState extends State<MontyIde> {
     _assistant.stop();
     setState(() => _isAssistantStreaming = false);
   }
+
+  /// Composes the AI Pilot system prompt for the next turn.
+  /// See [buildSystemPrompt] for the layering rules.
+  String _buildSystemPrompt() => buildSystemPrompt(
+        basePrompt: defaultAssistantPrompt,
+        extensions: _controller.extensions,
+        scriptFragments: _promptExtension?.fragments ?? const [],
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +353,7 @@ class _MontyIdeState extends State<MontyIde> {
             ),
           ),
         ],
-        if (_showUiPanel && widget.eventLoop != null) ...[
+        if (_showUiPanel && _eventLoop != null) ...[
           _HorizontalResizer(
             onDrag: (delta) {
               setState(() {
@@ -334,7 +366,7 @@ class _MontyIdeState extends State<MontyIde> {
           SizedBox(
             width: _uiPanelWidth,
             child: MontyUiPanel(
-              eventLoop: widget.eventLoop!,
+              eventLoop: _eventLoop!,
               onClose: () => setState(() => _showUiPanel = false),
             ),
           ),
@@ -367,7 +399,7 @@ class _MontyIdeState extends State<MontyIde> {
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showVariables = !_showVariables), icon: Icon(_showVariables ? Icons.account_tree : Icons.account_tree_outlined, color: _showVariables ? Colors.orange : null, size: 20), tooltip: 'Variables'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
-            if (widget.eventLoop != null)
+            if (_eventLoop != null)
               IconButton(
                 visualDensity: VisualDensity.compact,
                 onPressed: () => setState(() => _showUiPanel = !_showUiPanel),
@@ -378,6 +410,12 @@ class _MontyIdeState extends State<MontyIde> {
                 ),
                 tooltip: 'Monty UI Panel',
               ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: _controller.clearState,
+              icon: const Icon(Icons.restart_alt, color: Colors.red, size: 20),
+              tooltip: 'Reset Interpreter (cancels running scripts, clears UI + console)',
+            ),
           ],
         ),
       ),

@@ -10,16 +10,27 @@ import 'package:flutter/foundation.dart';
 /// Python code and observing results.
 class MontyIdeController extends ChangeNotifier {
   /// Creates a [MontyIdeController].
+  ///
+  /// Provide either a static [extensions] list, or an [extensionsFactory]
+  /// that produces fresh instances. The factory is preferred when any
+  /// extension's lifecycle is one-shot (e.g. `EventLoopExtension`, which
+  /// becomes permanently disposed after `onDispose`): [clearState] calls
+  /// the factory to swap in a fresh set, so Reset Interpreter actually
+  /// works for event-loop scripts.
   MontyIdeController({
     List<MontyExtension>? extensions,
-  }) : _extensions = extensions;
+    List<MontyExtension> Function()? extensionsFactory,
+  })  : _extensionsFactory = extensionsFactory,
+        _extensions = extensionsFactory?.call() ?? extensions;
 
-  final List<MontyExtension>? _extensions;
+  List<MontyExtension>? _extensions;
+  final List<MontyExtension> Function()? _extensionsFactory;
   MontyRuntime? _runtime;
   bool _isInitialized = false;
   bool _isExecuting = false;
 
-  /// Returns the list of registered extensions.
+  /// Returns the list of registered extensions. May change after
+  /// [clearState] when an [extensionsFactory] was supplied.
   List<MontyExtension>? get extensions => _extensions;
 
   /// The line number of the last error, if any.
@@ -205,38 +216,18 @@ class MontyIdeController extends ChangeNotifier {
 
   /// Performs static analysis on the given [code].
   ///
-  /// Errors are emitted to the [output] stream.
+  /// Pure static check via [Monty.typeCheck] — no runtime, no execution.
+  /// Safe to call on scripts with infinite loops (e.g. Monty UI `el_recv`
+  /// loops). Host function stubs from registered extensions are passed as
+  /// `prefixCode` so calls like `el_emit(...)` resolve. Errors are emitted
+  /// to the [output] stream.
   Future<void> typeCheck(String code) async {
     clearConsole();
     _outputController.add('--- Analysis Started ---\n');
     try {
-      // 1. Syntax/Indentation check (via a dry-run runtime)
-      _outputController.add('🔍 Checking syntax...\n');
-      try {
-        final normalized = '${code.trim()}\n';
-        final runtime = MontyRuntime(extensions: _extensions);
-        final handle = await runtime.execute(normalized);
-        await handle.result; // Wait for parse/exec
-        await runtime.dispose();
-        } on MontySyntaxError catch (e) {
-
-        var msg = '❌ [SyntaxError] ${e.message}';
-        final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
-        if (byteMatch != null) {
-          final startByte = int.tryParse(byteMatch.group(1)!);
-          if (startByte != null) {
-            final line = _getLineFromByteOffset('${code.trim()}\n', startByte);
-            msg += ' [IDE: Line $line]';
-          }
-        }
-        _outputController.add('$msg\n');
-        _outputController.add('--- Analysis Failed ---\n');
-        return;
-      }
-
-      // 2. Static Type Analysis
       _outputController.add('🔍 Checking types...\n');
-      final errors = await Monty.typeCheck(code);
+      final prefix = buildHostStubs(_extensions);
+      final errors = await Monty.typeCheck(code, prefixCode: prefix);
       if (errors.isEmpty) {
         _outputController.add('✅ Analysis complete: No errors found.\n');
       } else {
@@ -254,16 +245,69 @@ class MontyIdeController extends ChangeNotifier {
     }
   }
 
+  /// Synthesizes a Monty/Python preamble that declares stubs for every host
+  /// function exposed by [extensions], so [Monty.typeCheck] resolves names
+  /// like `el_emit`, `flutter_set_prop`, `prompt_extend`.
+  ///
+  /// Param types are mapped from [HostParamType]; return types default to
+  /// `object` with a small override table for functions whose return shape
+  /// the schema can't currently express (e.g. `el_recv -> dict`). When
+  /// dart_monty grows a return-type field we can drop the overrides.
+  static String buildHostStubs(List<MontyExtension>? extensions) {
+    if (extensions == null || extensions.isEmpty) return '';
+    const returnOverrides = <String, String>{
+      'el_recv': 'dict',
+    };
+    String pyParamType(HostParamType t) => switch (t) {
+          HostParamType.string => 'str',
+          HostParamType.integer => 'int',
+          HostParamType.number => 'float',
+          HostParamType.boolean => 'bool',
+          HostParamType.list => 'list',
+          HostParamType.map => 'dict',
+          HostParamType.any => 'object',
+        };
+    final buf = StringBuffer();
+    buf.writeln(
+      '# Auto-generated host-function stubs for Monty.typeCheck — do not edit.',
+    );
+    for (final ext in extensions) {
+      for (final fn in ext.functions) {
+        final name = fn.schema.name;
+        final params = fn.schema.params
+            .map((p) => '${p.name}: ${pyParamType(p.type)}')
+            .join(', ');
+        final ret = returnOverrides[name] ?? 'object';
+        // `raise NotImplementedError` types as Never, satisfying any return
+        // annotation — `...`/`pass` would be read as returning None.
+        buf.writeln(
+          'def $name($params) -> $ret: raise NotImplementedError',
+        );
+      }
+    }
+    return buf.toString();
+  }
+
   /// Clears only the console output.
   void clearConsole() {
     _outputController.add('___CLEAR_CONSOLE___');
   }
 
   /// Clears the interpreter state.
+  ///
+  /// Disposes the runtime, swaps in fresh extension instances (if a factory
+  /// was supplied — required for one-shot extensions like
+  /// `EventLoopExtension`), and creates a new runtime. Listeners are
+  /// notified so UI components can rebind to the new extensions.
   void clearState() {
     unawaited(_runtime?.dispose());
+    final factory = _extensionsFactory;
+    if (factory != null) {
+      _extensions = factory();
+    }
     _runtime = MontyRuntime(extensions: _extensions);
     lastErrorLine = null;
+    clearConsole();
     _outputController.add('--- Interpreter Reset ---\n');
     notifyListeners();
   }

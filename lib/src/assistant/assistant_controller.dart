@@ -51,12 +51,22 @@ class AssistantLogEvent extends AssistantEvent {
 /// Headless controller that manages the AI Assistant's verification loop.
 class AssistantController {
   /// Creates an [AssistantController].
+  ///
+  /// Provide either [systemPrompt] (static) or [systemPromptBuilder]
+  /// (rebuilt per turn — useful when extensions register prompt fragments
+  /// at runtime). If both are provided, [systemPromptBuilder] wins.
   AssistantController({
     required this.toolHandler,
     required this.llmService,
     required this.config,
-    required this.systemPrompt,
-  });
+    String? systemPrompt,
+    String Function()? systemPromptBuilder,
+  })  : assert(
+          systemPrompt != null || systemPromptBuilder != null,
+          'Provide systemPrompt or systemPromptBuilder',
+        ),
+        _staticSystemPrompt = systemPrompt,
+        _systemPromptBuilder = systemPromptBuilder;
 
   /// The tool handler to execute tools.
   final AssistantToolHandler toolHandler;
@@ -67,8 +77,12 @@ class AssistantController {
   /// The LLM configuration.
   final LlmConfig config;
 
-  /// The system prompt to use.
-  final String systemPrompt;
+  final String? _staticSystemPrompt;
+  final String Function()? _systemPromptBuilder;
+
+  /// Returns the system prompt for the next turn.
+  String get systemPrompt =>
+      _systemPromptBuilder?.call() ?? _staticSystemPrompt!;
 
   final List<Map<String, dynamic>> _history = [];
   int _turnCount = 0;
