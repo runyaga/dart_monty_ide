@@ -52,6 +52,93 @@ void main() async {
   }
 
   await seed(
+    'onboarding.txt',
+    '''# Welcome to Monty IDE
+
+This is a small IDE for Monty — a sandboxed Python 3 interpreter
+written in Rust and embedded in Flutter via dart_monty. Code runs in
+the browser (web build) or a local Flutter app (macOS/Linux/Windows)
+with no Python install required.
+
+
+## What's in front of you
+
+- File explorer (left): seeded examples + your own files.
+- Editor: edit and Run any .py file.
+- Console (below editor): print() output and errors.
+- Monty UI panel (toolbar, "smart_display" icon): live Flutter widgets
+  driven by Python via el_emit / el_recv.
+- AI Pilot panel (chat icon): natural-language assistant that reads
+  your buffer, writes/runs verified code, and can drive the running
+  Monty UI script via ui_dispatch.
+- Reset Interpreter (red restart button on toolbar): cancels any
+  running script and clears the bridge — required after Monty UI
+  loops, which run forever until reset.
+
+
+## Try it
+
+1. Open `examples/01_basics.py` and click Run — see the console.
+2. Open `examples/04_gui_counter.py`, toggle the Monty UI panel,
+   click Run. Use the buttons / slider in the panel.
+3. Click Reset Interpreter (red button) before running another file.
+4. Open `examples/06_thermostat.py` for a richer event-loop demo.
+
+
+## Using the AI Pilot
+
+The Pilot needs a *local* Ollama install. It is NOT bundled.
+
+Steps:
+
+1. Install Ollama: https://ollama.com/download
+2. Pull the default model:
+       ollama pull gpt-oss:20b
+3. Allow this page's origin (CORS) — without this, the browser
+   blocks every request even though Ollama is on localhost:
+
+       OLLAMA_ORIGINS="*" ollama serve
+
+   On macOS, if you launch Ollama from the menu bar app instead of a
+   terminal:
+
+       launchctl setenv OLLAMA_ORIGINS "*"
+       # then quit and relaunch the Ollama app.
+
+4. Reload this IDE. The blue "Connecting to Ollama…" banner above
+   the chat input should turn green/disappear. If it goes red with
+   "Can't reach Ollama", check the readme link in that banner.
+
+
+## Asking the Pilot to drive the GUI
+
+While a Monty UI script is running you can say things like:
+
+- "set the target to 25"
+- "click heat then step three times"
+- "press +1"
+
+The Pilot calls `ui_state` to read the panel, then `ui_dispatch` to
+inject events into the running event loop — no need to write more
+Python.
+
+
+## Hello world (with type hints)
+
+Open `hello.py`. Click Type Check, then Run. Both work even on the
+event-loop demos because Type Check is pure static analysis.
+
+
+## Where to go next
+
+- docs/monty_ui.md — Monty UI panel + layered system prompt deep dive
+- docs/web_deploy.md — Flutter web build, GitHub Pages, Ollama setup
+- README.md — top-level overview
+
+Have fun.
+''',
+  );
+  await seed(
     'hello.py',
     'def hi(name: str) -> str:\n    return f"hello {name}"\n\nprint(hi("Monty"))\n',
   );
