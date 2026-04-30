@@ -44,7 +44,7 @@ class _VariableInspectorState extends State<VariableInspector> {
   }
 
   Future<void> _refresh() async {
-    if (!widget.controller.isInitialized || widget.controller.isExecuting) return;
+    if (!widget.controller.isInitialized || widget.controller.isExecuting || _isLoading) return;
 
     if (mounted) setState(() => _isLoading = true);
 

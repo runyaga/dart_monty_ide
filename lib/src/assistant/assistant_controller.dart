@@ -72,6 +72,7 @@ class AssistantController {
 
   final List<Map<String, dynamic>> _history = [];
   int _turnCount = 0;
+  bool _isStopped = false;
 
   /// The maximum number of turns allowed in the verification loop.
   static const int maxTurns = 5;
@@ -85,9 +86,24 @@ class AssistantController {
   /// Returns the current conversation history.
   List<Map<String, dynamic>> get history => List.unmodifiable(_history);
 
+  /// Clears the conversation history.
+  void clearHistory() {
+    _history.clear();
+    _log('--- HISTORY CLEARED ---');
+  }
+
+  /// Stops the current processing loop.
+  void stop() {
+    _isStopped = true;
+    _log('--- STOP REQUESTED ---');
+  }
+
   /// Processes a user prompt and runs the verification loop.
-  Future<String> processPrompt(String prompt) async {
-    _history.add({'role': 'user', 'content': prompt});
+  /// An optional [context] can be provided to give the assistant more information about the current state.
+  Future<String> processPrompt(String prompt, {String? context}) async {
+    _isStopped = false;
+    final content = context != null ? '$context\n\n$prompt' : prompt;
+    _history.add({'role': 'user', 'content': content});
     _turnCount = 0;
     _log('--- NEW SESSION: $prompt ---');
     try {
@@ -102,6 +118,12 @@ class AssistantController {
   }
 
   Future<String> _loop() async {
+    if (_isStopped) {
+      final msg = '🛑 Assistant stopped by user.';
+      _log(msg);
+      return msg;
+    }
+
     _log('--- STARTING TURN ${_turnCount + 1} / $maxTurns ---');
     if (_turnCount >= maxTurns) {
       final msg = '⚠️ Verification turn limit reached ($maxTurns).';
@@ -126,14 +148,26 @@ class AssistantController {
     String assistantText = '';
     final toolCalls = <LlmToolCall>[];
 
-    await for (final chunk in stream) {
-      if (chunk.text != null) {
-        assistantText += chunk.text!;
-        _eventController.add(AssistantTextEvent(chunk.text!));
+    try {
+      await for (final chunk in stream) {
+        if (_isStopped) break;
+        if (chunk.text != null) {
+          assistantText += chunk.text!;
+          _eventController.add(AssistantTextEvent(chunk.text!));
+        }
+        if (chunk.toolCalls != null) {
+          toolCalls.addAll(chunk.toolCalls!);
+        }
       }
-      if (chunk.toolCalls != null) {
-        toolCalls.addAll(chunk.toolCalls!);
-      }
+    } catch (e) {
+      _log('LLM Stream Error: $e');
+      return 'Error: $e';
+    }
+
+    if (_isStopped) {
+      final msg = '🛑 Assistant stopped by user.';
+      _log(msg);
+      return msg;
     }
 
     if (toolCalls.isEmpty) {
@@ -168,6 +202,7 @@ class AssistantController {
 
     // Execute tools and add results to history
     for (final call in toolCalls) {
+      if (_isStopped) break;
       _eventController.add(ToolCallEvent(call.name, call.arguments));
       final result = await _executeTool(call);
       _eventController.add(ToolResultEvent(call.name, result));
@@ -177,6 +212,12 @@ class AssistantController {
         'tool_call_id': call.id,
         'content': jsonEncode(result),
       });
+    }
+
+    if (_isStopped) {
+      final msg = '🛑 Assistant stopped by user.';
+      _log(msg);
+      return msg;
     }
 
     // Recurse for the next turn
@@ -195,6 +236,11 @@ class AssistantController {
         final path = (call.arguments['path'] as String?) ?? 'file.py';
         final content = (call.arguments['content'] as String?) ?? '';
         return await toolHandler.writeFile(path, content);
+      } else if (call.name == 'read_file') {
+        final path = (call.arguments['path'] as String?) ?? '';
+        return await toolHandler.readFile(path);
+      } else if (call.name == 'list_files') {
+        return await toolHandler.listFiles();
       }
     } catch (e) {
       return {'error': e.toString()};
@@ -240,6 +286,25 @@ class AssistantController {
           'content': {'type': 'string'},
         },
         'required': ['path', 'content'],
+      },
+    ),
+    LlmTool(
+      name: 'read_file',
+      description: 'Read file from workspace.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'path': {'type': 'string'},
+        },
+        'required': ['path'],
+      },
+    ),
+    LlmTool(
+      name: 'list_files',
+      description: 'List all files in the workspace.',
+      parameters: {
+        'type': 'object',
+        'properties': {},
       },
     ),
   ];

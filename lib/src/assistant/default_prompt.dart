@@ -53,7 +53,10 @@ Assistant: "I've verified the logic. Here is the code: ```python\nnums: list[int
 ## IDE TOOLS
 - `type_check(code)`: MANDATORY pre-flight static analysis.
 - `run_python(code)`: Execute and see result. Only call AFTER successful `type_check`.
-- `write_file(path, content)`: Save to sidebar.
+- `write_file(path, content)`: Save file to sidebar.
+- `read_file(path)`: Read content of an existing file.
+- `list_files()`: List all files currently in the workspace.
+
 
 ## ERROR HANDLING
 Never use bare `except:`. Preserve error info with `except Exception as e:`.

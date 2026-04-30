@@ -171,18 +171,28 @@ class _MontyIdeState extends State<MontyIde> {
 
   Future<void> _handleAssistantSendMessage(String prompt) async {
     if (_isAssistantStreaming) return;
+
+    final currentCode = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+    final bufferName = _viewingAssistantBuffer ? 'AI Pilot' : 'Editor';
+    final context = 'Current Buffer ($bufferName):\n```python\n$currentCode\n```';
+
     setState(() {
       _assistantMessages.add(ChatMessage(role: 'user', content: prompt));
       _isAssistantStreaming = true;
     });
 
     try {
-      await _assistant.processPrompt(prompt);
+      await _assistant.processPrompt(prompt, context: context);
     } catch (e) {
       setState(() => _assistantMessages.add(ChatMessage(role: 'assistant', content: 'Error: $e')));
     } finally {
       if (mounted) setState(() => _isAssistantStreaming = false);
     }
+  }
+
+  void _handleAssistantStop() {
+    _assistant.stop();
+    setState(() => _isAssistantStreaming = false);
   }
 
   @override
@@ -255,6 +265,7 @@ class _MontyIdeState extends State<MontyIde> {
               messages: _assistantMessages,
               isStreaming: _isAssistantStreaming,
               onSendMessage: _handleAssistantSendMessage,
+              onStop: _handleAssistantStop,
               temperature: _assistantTemperature,
               onTemperatureChanged: (v) => setState(() => _assistantTemperature = v),
               debugLog: _assistantDebugLog,
@@ -263,7 +274,10 @@ class _MontyIdeState extends State<MontyIde> {
                 setState(() => _viewingAssistantBuffer = false);
               },
               onClose: () => setState(() => _showAssistant = false),
-              onClearChat: () => setState(() => _assistantMessages.clear()),
+              onClearChat: () {
+                _assistant.clearHistory();
+                setState(() => _assistantMessages.clear());
+              },
             ),
           ),
         ],
@@ -309,25 +323,28 @@ class _MontyIdeState extends State<MontyIde> {
     return Container(
       height: 40,
       color: Theme.of(context).secondaryHeaderColor,
-      child: Row(
-        children: [
-          IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = false), icon: Icon(Icons.edit_note, color: !_viewingAssistantBuffer ? Colors.blue : Colors.grey), tooltip: 'Editor'),
-          IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = true), icon: Icon(Icons.bolt, color: _viewingAssistantBuffer ? Colors.purple : Colors.grey), tooltip: 'AI Pilot'),
-          const Spacer(),
-          if (_isSaving) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: _handleRun, icon: const Icon(Icons.play_arrow, color: Colors.green, size: 20), tooltip: 'Run'),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: () {
-            final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-            unawaited(_controller.typeCheck(code));
-          }, icon: const Icon(Icons.fact_check_outlined, color: Colors.blue, size: 20), tooltip: 'Type Check'),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: () {
-            final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-            unawaited(_handleSaveAs(code));
-          }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As'),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showVariables = !_showVariables), icon: Icon(_showVariables ? Icons.account_tree : Icons.account_tree_outlined, color: _showVariables ? Colors.orange : null, size: 20), tooltip: 'Variables'),
-          IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = false), icon: Icon(Icons.edit_note, color: !_viewingAssistantBuffer ? Colors.blue : Colors.grey), tooltip: 'Editor'),
+            IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = true), icon: Icon(Icons.bolt, color: _viewingAssistantBuffer ? Colors.purple : Colors.grey), tooltip: 'AI Pilot'),
+            const SizedBox(width: 8),
+            if (_isSaving) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
+            IconButton(visualDensity: VisualDensity.compact, onPressed: _handleRun, icon: const Icon(Icons.play_arrow, color: Colors.green, size: 20), tooltip: 'Run'),
+            IconButton(visualDensity: VisualDensity.compact, onPressed: () {
+              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+              unawaited(_controller.typeCheck(code));
+            }, icon: const Icon(Icons.fact_check_outlined, color: Colors.blue, size: 20), tooltip: 'Type Check'),
+            IconButton(visualDensity: VisualDensity.compact, onPressed: () {
+              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+              unawaited(_handleSaveAs(code));
+            }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As'),
+            IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
+            IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showVariables = !_showVariables), icon: Icon(_showVariables ? Icons.account_tree : Icons.account_tree_outlined, color: _showVariables ? Colors.orange : null, size: 20), tooltip: 'Variables'),
+            IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
+          ],
+        ),
       ),
     );
   }

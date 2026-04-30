@@ -77,4 +77,24 @@ class IdeToolHandler implements AssistantToolHandler {
     await vfs.writeFile(path, content);
     return {'status': 'success', 'path': path};
   }
+
+  @override
+  Future<Map<String, dynamic>> readFile(String path) async {
+    try {
+      final content = await vfs.readFile(path);
+      return {'status': 'success', 'path': path, 'content': content};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> listFiles() async {
+    try {
+      final files = await vfs.listFiles();
+      return {'status': 'success', 'files': files};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }

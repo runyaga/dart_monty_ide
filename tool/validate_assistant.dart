@@ -19,6 +19,16 @@ class HeadlessToolHandler implements AssistantToolHandler {
   Future<Map<String, dynamic>> writeFile(String path, String content) async {
     return <String, dynamic>{'status': 'success'};
   }
+
+  @override
+  Future<Map<String, dynamic>> readFile(String path) async {
+    return <String, dynamic>{'status': 'success', 'content': '# mocked file content'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> listFiles() async {
+    return <String, dynamic>{'status': 'success', 'files': ['main.py']};
+  }
 }
 
 void main() async {

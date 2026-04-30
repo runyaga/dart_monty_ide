@@ -11,4 +11,10 @@ abstract interface class AssistantToolHandler {
 
   /// Writes a file to the workspace.
   Future<Map<String, dynamic>> writeFile(String path, String content);
+
+  /// Reads a file from the workspace.
+  Future<Map<String, dynamic>> readFile(String path);
+
+  /// Lists files in the workspace.
+  Future<Map<String, dynamic>> listFiles();
 }

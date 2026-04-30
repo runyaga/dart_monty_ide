@@ -119,7 +119,7 @@ packages:
       path: "../dart_monty"
       relative: true
     source: path
-    version: "0.20.0"
+    version: "0.17.0"
   dart_monty_core:
     dependency: "direct main"
     description:

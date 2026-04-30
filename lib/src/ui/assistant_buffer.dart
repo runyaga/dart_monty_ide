@@ -39,6 +39,14 @@ class MontyAssistantBuffer extends StatefulWidget {
 }
 
 class _MontyAssistantBufferState extends State<MontyAssistantBuffer> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -48,9 +56,11 @@ class _MontyAssistantBufferState extends State<MontyAssistantBuffer> {
         Expanded(
           child: CodeEditor(
             controller: widget.controller,
+            focusNode: _focusNode,
             chunkAnalyzer: const DefaultCodeChunkAnalyzer(),
             readOnly: false, // Allow guiding/tweaking
             wordWrap: false,
+            autofocus: true,
             style: CodeEditorStyle(
               fontSize: 13,
               codeTheme: CodeHighlightTheme(

@@ -38,6 +38,14 @@ class MockToolHandler implements AssistantToolHandler {
   @override
   Future<Map<String, dynamic>> writeFile(String path, String content) async =>
       {'status': 'success'};
+
+  @override
+  Future<Map<String, dynamic>> readFile(String path) async =>
+      {'status': 'success', 'content': 'mock content'};
+
+  @override
+  Future<Map<String, dynamic>> listFiles() async =>
+      {'status': 'success', 'files': ['test.py']};
 }
 
 void main() {

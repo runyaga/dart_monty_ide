@@ -57,6 +57,7 @@ class ChatPanel extends StatefulWidget {
     required this.messages,
     required this.isStreaming,
     required this.onSendMessage,
+    required this.onStop,
     required this.onCopyToEditor,
     required this.onClose,
     required this.temperature,
@@ -72,6 +73,7 @@ class ChatPanel extends StatefulWidget {
   final List<ChatMessage> messages;
   final bool isStreaming;
   final ValueChanged<String> onSendMessage;
+  final VoidCallback onStop;
   final ValueChanged<String> onCopyToEditor;
   final VoidCallback onClose;
   final VoidCallback? onClearChat;
@@ -86,6 +88,7 @@ class ChatPanel extends StatefulWidget {
 class _ChatPanelState extends State<ChatPanel> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocusNode = FocusNode();
   bool _showSettings = false;
   bool _showDebug = false;
 
@@ -93,6 +96,7 @@ class _ChatPanelState extends State<ChatPanel> {
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
+    _inputFocusNode.dispose();
     super.dispose();
   }
 
@@ -102,6 +106,7 @@ class _ChatPanelState extends State<ChatPanel> {
     _inputController.clear();
     widget.onSendMessage(prompt);
     _scrollToBottom(force: true);
+    _inputFocusNode.requestFocus();
   }
 
   @override
@@ -218,23 +223,36 @@ class _ChatPanelState extends State<ChatPanel> {
             },
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: Theme.of(context).dividerColor))),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _inputController,
-                  decoration: const InputDecoration(hintText: 'Ask the Monty Assistant...', border: InputBorder.none),
-                  onSubmitted: (_) => _sendMessage(),
+        Material(
+          color: Theme.of(context).cardColor,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: Theme.of(context).dividerColor))),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _inputController,
+                    focusNode: _inputFocusNode,
+                    decoration: const InputDecoration(hintText: 'Ask the Monty Assistant...', border: InputBorder.none),
+                    onSubmitted: (_) => _sendMessage(),
+                    autofocus: true,
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: widget.isStreaming ? null : _sendMessage,
-                icon: widget.isStreaming ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send),
-              ),
-            ],
+                if (widget.isStreaming)
+                  IconButton(
+                    onPressed: widget.onStop,
+                    icon: const Icon(Icons.stop_circle, color: Colors.red),
+                    tooltip: 'Stop Assistant',
+                  )
+                else
+                  IconButton(
+                    onPressed: _sendMessage,
+                    icon: const Icon(Icons.send),
+                    tooltip: 'Send Prompt',
+                  ),
+              ],
+            ),
           ),
         ),
       ],

@@ -73,8 +73,10 @@ class MontyIdeController extends ChangeNotifier {
 
     if (!silent && clear) clearConsole();
     _isExecuting = true;
-    if (!silent) lastErrorLine = null;
-    notifyListeners();
+    if (!silent) {
+      lastErrorLine = null;
+      notifyListeners();
+    }
 
     try {
       // Normalize newlines and ensure trailing newline for the parser.
@@ -180,7 +182,7 @@ class MontyIdeController extends ChangeNotifier {
       return null;
     } finally {
       _isExecuting = false;
-      notifyListeners();
+      if (!silent) notifyListeners();
     }
   }
 
