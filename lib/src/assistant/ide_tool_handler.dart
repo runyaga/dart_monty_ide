@@ -4,6 +4,7 @@ import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
+import 'package:flutter/foundation.dart';
 
 /// Implementation of [AssistantToolHandler] that uses the live IDE controllers.
 /// A tool handler that interacts with the Monty IDE state.
@@ -113,14 +114,17 @@ class IdeToolHandler implements AssistantToolHandler {
   }) async {
     final el = _eventLoop;
     if (el == null) {
+      debugPrint('[ui_dispatch] no EventLoopExtension registered');
       return {'status': 'error', 'message': 'EventLoopExtension not registered'};
     }
     final event = <String, Object?>{'type': eventType, 'target': target};
     if (value != null) event['value'] = value;
+    debugPrint('[ui_dispatch] dispatching $event (awaiting=${el.isWaiting})');
     try {
       el.dispatch(event);
       return {'status': 'success', 'event': event};
     } on StateError catch (e) {
+      debugPrint('[ui_dispatch] StateError: ${e.message}');
       return {'status': 'error', 'message': e.message, 'event': event};
     }
   }

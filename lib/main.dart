@@ -310,128 +310,173 @@ Have fun.
   );
   await seed(
     'examples/04_llm_text_adventure.py',
-    '# REQUIRES OLLAMA: this script calls pilot_ask(...) for narrative.\n'
-        '# Each click of "Continue" sends the running story to the LLM and\n'
-        '# appends what comes back. Type a custom action to steer the plot.\n'
-        'prompt_extend(\n'
-        '    "Text adventure: the script calls pilot_ask() to continue a "\n'
-        "    \"branching narrative. Don't drive this with ui_dispatch — let the user play.\"\n"
-        ')\n'
-        '\n'
-        'story: str = "You are standing in a dusty library, three doors before you. The brass door hums faintly."\n'
-        'last_action: str = ""\n'
-        '\n'
-        'while True:\n'
-        '    el_emit({\n'
-        '        "type": "column",\n'
-        '        "children": [\n'
-        '            {"type": "text", "value": "📖 Monty Adventure", "size": 18},\n'
-        '            {"type": "text", "value": story},\n'
-        '            {"type": "text_field", "id": "action", "value": last_action,\n'
-        '             "hint": "What do you do? (or just press Continue)"},\n'
-        '            {"type": "row", "children": [\n'
-        '                {"type": "button", "id": "continue", "label": "Continue"},\n'
-        '                {"type": "button", "id": "restart", "label": "Restart"},\n'
-        '            ]},\n'
-        '        ],\n'
-        '    })\n'
-        '    evt = el_recv()\n'
-        '    if evt["type"] == "quit":\n'
-        '        break\n'
-        '    target = evt["target"]\n'
-        '    if target == "action" and evt["type"] == "submit":\n'
-        '        last_action = evt["value"]\n'
-        '    elif target == "restart":\n'
-        '        story = "You are standing in a dusty library, three doors before you. The brass door hums faintly."\n'
-        '        last_action = ""\n'
-        '    elif target == "continue":\n'
-        '        action_text = last_action if last_action else "the player waits"\n'
-        '        prompt = (\n'
-        '            "You are the narrator of a short, atmospheric text adventure. "\n'
-        '            "Continue the story with ONE short paragraph (2-3 sentences). "\n'
-        '            "End by hinting at 2-3 possible next actions. "\n'
-        '            "Story so far: " + story + "\\n"\n'
-        '            "Player action: " + action_text\n'
-        '        )\n'
-        '        next_chunk = pilot_ask(prompt)\n'
-        '        story = story + "\\n\\n" + next_chunk.strip()\n'
-        '        last_action = ""\n'
-        '\n'
-        'print("THE END")\n',
+    r'''# REQUIRES OLLAMA: this script calls pilot_ask(...) for narrative.
+# Each click of "Continue" sends the running story to the LLM and
+# appends what comes back. Type a custom action to steer the plot.
+prompt_extend(
+    "Text adventure: the script calls pilot_ask() to continue a "
+    "branching narrative. Don't drive this with ui_dispatch — let the user play."
+)
+
+START = (
+    "You are standing in a dusty library, three doors before you. "
+    "The brass door hums faintly."
+)
+
+story: str = START
+last_action: str = ""
+
+while True:
+    el_emit({
+        "type": "column",
+        "children": [
+            {"type": "text", "value": "📖 Monty Adventure", "size": 18},
+            {"type": "text", "value": story},
+            {"type": "text_field", "id": "action", "value": last_action,
+             "hint": "What do you do? (or just press Continue)"},
+            {"type": "row", "children": [
+                {"type": "button", "id": "continue", "label": "Continue"},
+                {"type": "button", "id": "restart", "label": "Restart"},
+            ]},
+        ],
+    })
+    evt = el_recv()
+    if evt["type"] == "quit":
+        break
+    target = evt["target"]
+    if target == "action" and evt["type"] == "submit":
+        last_action = evt["value"]
+    elif target == "restart":
+        story = START
+        last_action = ""
+    elif target == "continue":
+        # Show a thinking state while pilot_ask blocks on the LLM.
+        el_emit({
+            "type": "column",
+            "children": [
+                {"type": "text", "value": "📖 Monty Adventure", "size": 18},
+                {"type": "text", "value": story},
+                {"type": "text", "value": "🤔 The narrator is thinking…", "size": 12},
+            ],
+        })
+        action_text = last_action if last_action else "the player waits"
+        prompt = (
+            "You are the narrator of a short, atmospheric text adventure. "
+            "Continue the story with ONE short paragraph (2-3 sentences). "
+            "End by hinting at 2-3 possible next actions.\n"
+            f"Story so far: {story}\n"
+            f"Player action: {action_text}"
+        )
+        next_chunk = pilot_ask(prompt)
+        story = story + "\n\n" + next_chunk.strip()
+        last_action = ""
+
+print("THE END")
+''',
   );
   await seed(
     'examples/05_llm_trivia.py',
-    '# REQUIRES OLLAMA: this script generates trivia via pilot_ask(...).\n'
-        '# Click "New question" — the LLM produces Q + 4 options. Pick one;\n'
-        '# the script asks the LLM to judge.\n'
-        'prompt_extend(\n'
-        '    "Trivia: the script calls pilot_ask() to generate a question and "\n'
-        '    "to grade the user\'s answer. Score is kept in Python state."\n'
-        ')\n'
-        '\n'
-        'import json\n'
-        '\n'
-        'score: int = 0\n'
-        'asked: int = 0\n'
-        'question: str = "Click \\"New question\\" to begin."\n'
-        'options: list[str] = ["A", "B", "C", "D"]\n'
-        'feedback: str = ""\n'
-        'last_correct: str = ""\n'
-        '\n'
-        'def fetch_question() -> dict:\n'
-        '    raw = pilot_ask(\n'
-        '        \'Generate a single trivia question. Return ONLY valid JSON \'\n'
-        '        \'with these keys: "q" (the question, string), "options" (list \'\n'
-        '        \'of 4 short strings, no labels), "answer" (one of the option \'\n'
-        '        \'strings, exactly matching). No markdown, no preamble.\'\n'
-        '    )\n'
-        '    try:\n'
-        '        return json.loads(raw)\n'
-        '    except json.JSONDecodeError:\n'
-        '        return {"q": "(parse error)", "options": ["A", "B", "C", "D"], "answer": "A"}\n'
-        '\n'
-        'while True:\n'
-        '    score_label = "Score: " + str(score) + " / " + str(asked)\n'
-        '    el_emit({\n'
-        '        "type": "column",\n'
-        '        "children": [\n'
-        '            {"type": "text", "value": "🧠 Monty Trivia", "size": 18},\n'
-        '            {"type": "text", "value": score_label, "size": 12},\n'
-        '            {"type": "text", "value": question, "size": 14},\n'
-        '            {"type": "row", "children": [\n'
-        '                {"type": "button", "id": "opt0", "label": options[0]},\n'
-        '                {"type": "button", "id": "opt1", "label": options[1]},\n'
-        '            ]},\n'
-        '            {"type": "row", "children": [\n'
-        '                {"type": "button", "id": "opt2", "label": options[2]},\n'
-        '                {"type": "button", "id": "opt3", "label": options[3]},\n'
-        '            ]},\n'
-        '            {"type": "text", "value": feedback, "size": 12},\n'
-        '            {"type": "button", "id": "next", "label": "New question"},\n'
-        '        ],\n'
-        '    })\n'
-        '    evt = el_recv()\n'
-        '    if evt["type"] == "quit":\n'
-        '        break\n'
-        '    target = evt["target"]\n'
-        '    if target == "next":\n'
-        '        feedback = "Thinking..."\n'
-        '        q = fetch_question()\n'
-        '        question = q["q"]\n'
-        '        options = q["options"]\n'
-        '        last_correct = q["answer"]\n'
-        '        feedback = ""\n'
-        '    elif target.startswith("opt"):\n'
-        '        idx = int(target[3:])\n'
-        '        picked = options[idx]\n'
-        '        asked = asked + 1\n'
-        '        if picked == last_correct:\n'
-        '            score = score + 1\n'
-        '            feedback = "✅ Correct!"\n'
-        '        else:\n'
-        '            feedback = "❌ Wrong. Answer: " + last_correct\n'
-        '\n'
-        'print("Final score: " + str(score) + " / " + str(asked))\n',
+    r'''# REQUIRES OLLAMA: this script generates trivia via pilot_ask(...).
+# Click "New question" — the LLM produces Q + 4 options. Pick one;
+# the script grades it locally and rotates topics to avoid repeats.
+prompt_extend(
+    "Trivia: the script calls pilot_ask() to generate a question. "
+    "Score and history are kept in Python state. Topics rotate."
+)
+
+import json
+
+score: int = 0
+asked: int = 0
+question: str = 'Click "New question" to begin.'
+options: list[str] = ["A", "B", "C", "D"]
+feedback: str = ""
+last_correct: str = ""
+topics: list[str] = [
+    "1980s movies", "ancient history", "marine biology",
+    "world capitals", "classical music", "computer science",
+    "mythology", "famous paintings", "space exploration",
+    "physics", "Olympic sports", "literature",
+]
+recent: list[str] = []
+
+
+def fetch_question() -> dict:
+    topic = topics[asked % len(topics)]
+    avoid = "; ".join(recent[-5:]) if recent else "(none)"
+    prompt = (
+        f"Generate ONE trivia question about {topic}. "
+        f"Avoid repeating these recent questions: {avoid}. "
+        'Return ONLY valid JSON with these keys: '
+        '"q" (string, the question), '
+        '"options" (list of 4 distinct short strings, no A/B/C/D labels, in random order), '
+        '"answer" (one of the option strings, exactly matching). '
+        "No markdown, no preamble, just the JSON object."
+    )
+    raw = pilot_ask(prompt)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "q": "(LLM produced invalid JSON; click New question to retry)",
+            "options": ["retry", "retry", "retry", "retry"],
+            "answer": "retry",
+        }
+
+
+while True:
+    score_label = f"Score: {score} / {asked}"
+    el_emit({
+        "type": "column",
+        "children": [
+            {"type": "text", "value": "🧠 Monty Trivia", "size": 18},
+            {"type": "text", "value": score_label, "size": 12},
+            {"type": "text", "value": question, "size": 14},
+            {"type": "row", "children": [
+                {"type": "button", "id": "opt0", "label": options[0]},
+                {"type": "button", "id": "opt1", "label": options[1]},
+            ]},
+            {"type": "row", "children": [
+                {"type": "button", "id": "opt2", "label": options[2]},
+                {"type": "button", "id": "opt3", "label": options[3]},
+            ]},
+            {"type": "text", "value": feedback, "size": 12},
+            {"type": "button", "id": "next", "label": "New question"},
+        ],
+    })
+    evt = el_recv()
+    if evt["type"] == "quit":
+        break
+    target = evt["target"]
+    if target == "next":
+        # Emit a thinking-state view before the (blocking) LLM call,
+        # otherwise the panel looks frozen while we wait for Ollama.
+        el_emit({
+            "type": "column",
+            "children": [
+                {"type": "text", "value": "🧠 Monty Trivia", "size": 18},
+                {"type": "text", "value": f"Score: {score} / {asked}", "size": 12},
+                {"type": "text", "value": "🤔 Thinking…", "size": 14},
+            ],
+        })
+        q = fetch_question()
+        question = q["q"]
+        options = q["options"]
+        last_correct = q["answer"]
+        recent.append(question)
+        feedback = ""
+    elif target.startswith("opt"):
+        idx = int(target[3:])
+        picked = options[idx]
+        asked = asked + 1
+        if picked == last_correct:
+            score = score + 1
+            feedback = "✅ Correct!"
+        else:
+            feedback = "❌ Wrong. Answer: " + last_correct
+
+print(f"Final score: {score} / {asked}")
+''',
   );
 
   final files = await vfs.listFiles();
