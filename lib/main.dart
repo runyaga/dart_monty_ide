@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:dart_duckdb/dart_duckdb.dart';
+import 'package:dart_duckdb/open.dart';
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/dart_monty_ide.dart';
 import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
 import 'package:dart_monty_ide/src/assistant/system_prompt_builder.dart';
+import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/bridge/flutter_extension.dart';
 import 'package:dart_monty_ide/src/bridge/llm_extension.dart';
 import 'package:dart_monty_ide/src/bridge/prompt_extension.dart';
@@ -13,10 +18,25 @@ import 'package:dart_monty_ide/src/vfs/memory_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:hhg_dataframe/hhg_dataframe.dart';
+import 'package:hhg_duckdb/hhg_duckdb.dart';
+import 'package:hhg_svg/hhg_svg.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // libduckdb resolution for macOS pure-Dart-style FFI binding.
+  // dart_duckdb 1.4.4 doesn't bundle the dylib on macOS; with Flutter's
+  // plugin layer in play this typically just works, but DUCKDB_LIBPATH
+  // wins if set, and a known probe path is the fallback.
+  if (!kIsWeb && Platform.isMacOS) {
+    final lib = Platform.environment['DUCKDB_LIBPATH'] ??
+        '/tmp/duckdb-spatial-probe/duckdb_lib/libduckdb.dylib';
+    if (File(lib).existsSync()) {
+      open.overrideFor(OperatingSystem.macOS, lib);
+    }
+  }
 
   MontyVfs vfs;
   if (kIsWeb) {
@@ -42,6 +62,16 @@ void main() async {
     temperature: 0.7,
   );
 
+  // The SvgHostApi takes a callback so it can be constructed before
+  // the controller exists (the factory below references the host api
+  // before the controller is built). The closure resolves the
+  // controller lazily; by the time `render(...)` fires, the controller
+  // has been assigned.
+  late final MontyIdeController controller;
+  final svgHostApi = ConsoleSvgHostApi(
+    (line) => controller.appendOutput(line),
+  );
+
   List<MontyExtension> extensionsFactory() {
     final flutterExt = MontyFlutterExtension(registry);
     final eventLoopExt = EventLoopExtension();
@@ -50,7 +80,23 @@ void main() async {
       service: OllamaLlmService(),
       config: llmConfig,
     );
-    final exts = <MontyExtension>[flutterExt, eventLoopExt, promptExt, llmExt];
+    final dataframeExt = DataFrameExtension();
+    // autoLoadSpatial: false — loading the unsigned spatial extension
+    // triggers macOS Gatekeeper. Scripts that want it can call
+    // duck_execute("INSTALL spatial") + duck_execute("LOAD spatial")
+    // themselves; the user will see the Gatekeeper prompt once and
+    // can Allow Anyway in System Preferences > Privacy & Security.
+    final duckDbExt = DuckDbExtension(autoLoadSpatial: false);
+    final svgExt = SvgExtension(hostApi: svgHostApi);
+    final exts = <MontyExtension>[
+      flutterExt,
+      eventLoopExt,
+      promptExt,
+      llmExt,
+      dataframeExt,
+      duckDbExt,
+      svgExt,
+    ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
           basePrompt: defaultAssistantPrompt,
           extensions: exts,
@@ -59,7 +105,7 @@ void main() async {
     return exts;
   }
 
-  final controller = MontyIdeController(extensionsFactory: extensionsFactory);
+  controller = MontyIdeController(extensionsFactory: extensionsFactory);
 
   // Seed sample files only if missing — never overwrite user edits.
   final existing = (await vfs.listFiles()).toSet();
@@ -478,6 +524,15 @@ while True:
 print(f"Final score: {score} / {asked}")
 ''',
   );
+  // HHG examples are canonical demos — always overwrite so updates
+  // ship. Don't edit these in the IDE; edit `_hhgDataframeScript`,
+  // `_hhgDuckdbScript`, `_hhgDataPillarsScript` below and rebuild.
+  await vfs.writeFile('examples/06_hhg_dataframe.py', _hhgDataframeScript);
+  await vfs.writeFile('examples/07_hhg_duckdb.py', _hhgDuckdbScript);
+  await vfs.writeFile(
+    'examples/08_hhg_data_pillars.py',
+    _hhgDataPillarsScript,
+  );
 
   final files = await vfs.listFiles();
   bool shouldUpdate = !files.contains('system_prompt.txt');
@@ -496,6 +551,7 @@ print(f"Final score: {score} / {asked}")
     vfs: vfs,
     controller: controller,
     registry: registry,
+    svgHostApi: svgHostApi,
   ));
 }
 
@@ -506,6 +562,7 @@ class MyApp extends StatelessWidget {
     required this.vfs,
     required this.controller,
     required this.registry,
+    required this.svgHostApi,
     super.key,
   });
 
@@ -520,6 +577,10 @@ class MyApp extends StatelessWidget {
   /// The widget registry for the bridge (durable across runs).
   final WidgetRegistry registry;
 
+  /// The host api the SVG preview panel watches for `svg_render(...)`
+  /// output.
+  final ConsoleSvgHostApi svgHostApi;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -529,7 +590,12 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: MyHomePage(vfs: vfs, controller: controller, registry: registry),
+      home: MyHomePage(
+        vfs: vfs,
+        controller: controller,
+        registry: registry,
+        svgHostApi: svgHostApi,
+      ),
     );
   }
 }
@@ -541,6 +607,7 @@ class MyHomePage extends StatelessWidget {
     required this.vfs,
     required this.controller,
     required this.registry,
+    required this.svgHostApi,
     super.key,
   });
 
@@ -553,6 +620,9 @@ class MyHomePage extends StatelessWidget {
   /// The widget registry for the bridge.
   final WidgetRegistry registry;
 
+  /// SVG host api for the preview panel.
+  final ConsoleSvgHostApi svgHostApi;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -564,7 +634,144 @@ class MyHomePage extends StatelessWidget {
         vfs: vfs,
         controller: controller,
         registry: registry,
+        svgHostApi: svgHostApi,
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Seeded HHG example scripts.
+//
+// Raw triple-single (r'''...''') strings so single quotes inside the
+// Python source don't need escaping. Dart only ends r''' on three
+// consecutive ' characters.
+// ---------------------------------------------------------------------------
+
+const _hhgDataframeScript = r'''
+# HHG: pure dataframe round-trip — no SQL, no SVG, no LLM.
+# Builds a frame from row dicts, filters, projects, returns rows.
+requires(["df_from_records", "df_filter", "df_select", "df_to_records"])
+
+records = [
+    {"name": "Alice",   "city": "NYC",    "age": 25},
+    {"name": "Bob",     "city": "London", "age": 30},
+    {"name": "Carol",   "city": "Paris",  "age": 41},
+    {"name": "Dan",     "city": "NYC",    "age": 17},
+    {"name": "Eve",     "city": "London", "age": 22},
+]
+
+df = df_from_records(records)
+print("Loaded " + str(len(records)) + " records")
+
+nyc = df_filter(df, where={"city": "NYC"})
+nyc_count = len(nyc["name"])
+print("NYC rows: " + str(nyc_count))
+
+names_and_ages = df_select(nyc, columns=["name", "age"])
+
+# Last expression = the IDE return value.
+df_to_records(names_and_ages)
+''';
+
+const _hhgDuckdbScript = r'''
+# HHG: DuckDB SQL — basic SELECT / aggregations / row-form output.
+# (Spatial works on FFI but triggers macOS Gatekeeper for the unsigned
+# extension binary; the IDE keeps autoLoadSpatial disabled. Scripts
+# that want spatial can call duck_execute("INSTALL spatial") and
+# duck_execute("LOAD spatial") themselves and Allow Anyway in
+# System Preferences > Privacy & Security on first prompt.)
+requires(["duck_execute", "duck_query", "duck_query_records"])
+
+duck_execute("CREATE OR REPLACE TABLE cities (name VARCHAR, country VARCHAR, pop INTEGER)")
+duck_execute("""
+INSERT INTO cities VALUES
+    ('NYC',    'US',  8336000),
+    ('LA',     'US',  3990000),
+    ('London', 'UK',  9000000),
+    ('Paris',  'FR',  2148000),
+    ('Tokyo',  'JP', 13960000)
+""")
+print("Loaded cities table")
+
+# Aggregation — group by country, count + sum.
+totals = duck_query("""
+SELECT country, count(*) AS n, sum(pop) AS total_pop
+FROM cities
+GROUP BY country
+ORDER BY total_pop DESC
+""")
+print("Aggregated by country: " + str(totals))
+
+# Row-form output — a top-N query as a list of dicts.
+top_three = duck_query_records("""
+SELECT name, pop FROM cities
+ORDER BY pop DESC
+LIMIT 3
+""")
+print("Top 3 by population: " + str(top_three))
+
+# Last expression = the IDE return value.
+top_three
+''';
+
+const _hhgDataPillarsScript = r'''
+# HHG: all three pillars composed — duckdb + dataframe + svg.
+# DuckDB aggregates; dataframe round-trips the columnar wire format;
+# we hand-roll a tiny SVG bar chart and svg_render it.
+# The IDE's ConsoleSvgHostApi prints a one-line preview to the
+# console below — that's the visual confirmation in v1.
+requires([
+    "duck_execute", "duck_query",
+    "df_to_records",
+    "svg_render",
+])
+
+duck_execute("CREATE OR REPLACE TABLE sales (region VARCHAR, sales INTEGER)")
+duck_execute("""
+INSERT INTO sales VALUES
+    ('W', 10), ('W', 20), ('E', 30), ('E', 40), ('W', 50)
+""")
+print("Loaded sales table")
+
+totals = duck_query("""
+SELECT region, sum(sales) AS total
+FROM sales
+GROUP BY region
+ORDER BY region
+""")
+print("Totals: " + str(totals))
+
+rows = df_to_records(totals)
+print("As records: " + str(rows))
+
+# Hand-roll a tiny SVG bar chart.
+regions = totals["region"]
+values  = totals["total"]
+max_v = max(values)
+bar_w = 30
+gap = 10
+chart_h = 60
+chart_w = (bar_w + gap) * len(regions) + gap
+
+bars = ""
+labels = ""
+i = 0
+for r in regions:
+    v = values[i]
+    h = (v / max_v) * chart_h
+    x = gap + i * (bar_w + gap)
+    y = chart_h - h
+    cx = x + bar_w / 2
+    bars = bars + '<rect x="' + str(x) + '" y="' + str(y) + '" width="' + str(bar_w) + '" height="' + str(h) + '" fill="steelblue"/>'
+    labels = labels + '<text x="' + str(cx) + '" y="' + str(chart_h + 12) + '" text-anchor="middle" font-size="10">' + r + '</text>'
+    labels = labels + '<text x="' + str(cx) + '" y="' + str(chart_h + 24) + '" text-anchor="middle" font-size="9">' + str(v) + '</text>'
+    i = i + 1
+
+svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + str(chart_w) + '" height="' + str(chart_h + 30) + '">' + bars + labels + '</svg>'
+svg_render(svg)
+print("Rendered SVG via SvgExtension; check the line above for the host preview.")
+
+# Last expression = the IDE return value.
+{"regions": regions, "values": values}
+''';

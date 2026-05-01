@@ -1,17 +1,26 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
+import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
+import 'package:dart_monty_ide/src/ui/svg_preview_panel.dart';
 import 'package:flutter/material.dart';
 
 /// A panel that renders a Flutter widget tree emitted by Python via
-/// `el_emit(...)` and forwards user events back via `EventLoopExtension.dispatch`.
+/// `el_emit(...)` and forwards user events back via
+/// `EventLoopExtension.dispatch`. When a [svgHostApi] is supplied, also
+/// shows the latest `svg_render(...)` output above the tree.
 class MontyUiPanel extends StatefulWidget {
   const MontyUiPanel({
     required this.eventLoop,
     required this.onClose,
+    this.svgHostApi,
     super.key,
   });
 
   final EventLoopExtension eventLoop;
   final VoidCallback onClose;
+
+  /// Optional SVG host api. When non-null, the panel mounts an
+  /// [SvgPreviewPanel] above the el_emit tree.
+  final ConsoleSvgHostApi? svgHostApi;
 
   @override
   State<MontyUiPanel> createState() => _MontyUiPanelState();
@@ -72,6 +81,8 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
         children: [
           _buildHeader(context),
           const Divider(height: 1),
+          if (widget.svgHostApi != null)
+            SvgPreviewPanel(hostApi: widget.svgHostApi!),
           Expanded(
             child: _tree == null
                 ? const _EmptyState()

@@ -49,6 +49,16 @@ class MontyIdeController extends ChangeNotifier {
   /// Stream of stdout and error messages from the interpreter.
   Stream<String> get output => _outputController.stream;
 
+  /// Appends [line] to the IDE console.
+  ///
+  /// Used by host functions and host-API impls (e.g. an
+  /// `SvgHostApi` that wants to surface "captured 1 SVG, 412 bytes")
+  /// that have something user-visible to report. Adds a trailing
+  /// newline if [line] doesn't already end in one.
+  void appendOutput(String line) {
+    _outputController.add(line.endsWith('\n') ? line : '$line\n');
+  }
+
   /// Initializes the Monty platform and the runtime.
   ///
   /// This must be called before [execute].
@@ -62,6 +72,10 @@ class MontyIdeController extends ChangeNotifier {
     _runtime = MontyRuntime(
       extensions: _extensions,
     );
+    // Register HHG extras (currently `requires(...)`) so scripts that
+    // call them through plain `runtime.execute(...)` (rather than via
+    // `Hhg.run`) see them as available. Idempotent.
+    Hhg.attach(_runtime!);
     debugPrint('Monty Runtime Created.');
 
     _isInitialized = true;
@@ -280,6 +294,8 @@ class MontyIdeController extends ChangeNotifier {
       _extensions = factory();
     }
     _runtime = MontyRuntime(extensions: _extensions);
+    // Re-attach HHG extras after interpreter reset.
+    Hhg.attach(_runtime!);
     lastErrorLine = null;
     clearConsole();
     _outputController.add('--- Interpreter Reset ---\n');

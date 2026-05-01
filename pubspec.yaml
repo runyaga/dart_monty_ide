@@ -9,6 +9,7 @@ environment:
 
 dependencies:
   cupertino_icons: ^1.0.8
+  dart_duckdb: ^1.4.4
   dart_monty:
     path: ../dart_monty
   dart_monty_core:
@@ -16,6 +17,12 @@ dependencies:
   dart_monty_hhg:
     path: ../dart_monty_labs/packages/dart_monty_hhg
   file: ^7.0.0
+  hhg_dataframe:
+    path: ../dart_monty_labs/packages/hhg_dataframe
+  hhg_duckdb:
+    path: ../dart_monty_labs/packages/hhg_duckdb
+  hhg_svg:
+    path: ../dart_monty_labs/packages/hhg_svg
   flutter:
     sdk: flutter
   flutter_markdown_plus: ^1.0.0
@@ -29,6 +36,7 @@ dependencies:
   re_highlight: ^0.0.3
   rxdart: ^0.28.0
   url_launcher: ^6.3.0
+  jovial_svg: ^1.1.29
 
 dependency_overrides:
   dart_monty_core:

@@ -31,6 +31,25 @@
 
   <title>dart_monty_ide</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- DuckDB-WASM + Apache Arrow loader for hhg_duckdb on Flutter web.
+       Pinned to the same versions dart_duckdb 1.4.4 references. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "apache-arrow": "https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/+esm"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.1-dev222.0/+esm";
+    import * as arrow from "apache-arrow";
+    window.duckdbWasmReady = new Promise((resolve) => {
+      window.duckdbduckdbWasm = duckdb;
+      window.ArrowTable = arrow.Table;
+      resolve();
+    });
+  </script>
 </head>
 <body>
   <!--

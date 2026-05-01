@@ -12,7 +12,9 @@ import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
+import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
+import 'package:dart_monty_ide/src/ui/svg_preview_panel.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -25,12 +27,17 @@ class MontyIde extends StatefulWidget {
     required this.vfs,
     this.controller,
     this.registry,
+    this.svgHostApi,
     super.key,
   });
 
   final MontyVfs vfs;
   final MontyIdeController? controller;
   final WidgetRegistry? registry;
+
+  /// Optional SVG host api to render `svg_render(...)` output in the
+  /// editor area's preview panel. When `null`, no preview is shown.
+  final ConsoleSvgHostApi? svgHostApi;
 
   @override
   State<MontyIde> createState() => _MontyIdeState();
@@ -63,7 +70,10 @@ class _MontyIdeState extends State<MontyIde> {
 
   String? _currentFilePath;
   bool _isSaving = false;
-  bool _showAssistant = true;
+  // Default closed — opening it triggers the Ollama probe and shows
+  // the "Can't reach Ollama" banner when no local Ollama is running.
+  // Users who want the AI Pilot click the chat icon to open it.
+  bool _showAssistant = false;
   bool _showExternals = false;
   bool _showUiPanel = false;
   bool _viewingAssistantBuffer = false;
@@ -99,10 +109,24 @@ class _MontyIdeState extends State<MontyIde> {
     _controller.addListener(_onControllerChanged);
     _controller.output.listen(_consoleStreamController.add);
     _editorController.addListener(_onEditorChanged);
-    
+
+    // Auto-open the Monty UI panel when an svg_render(...) arrives so
+    // the user doesn't have to click the toggle to see their output.
+    // After they close the panel manually, future SVGs re-open it —
+    // that matches the el_emit-driven mental model: any UI-bound
+    // output pops the panel.
+    widget.svgHostApi?.addListener(_onSvgRendered);
+
     _initAssistant();
     unawaited(_initController());
     unawaited(_probeOllama());
+  }
+
+  void _onSvgRendered() {
+    if (!mounted) return;
+    if (!_showUiPanel) {
+      setState(() => _showUiPanel = true);
+    }
   }
 
   /// Best-effort probe so the chat panel can show a banner when the Pilot
@@ -425,6 +449,7 @@ class _MontyIdeState extends State<MontyIde> {
             child: MontyUiPanel(
               eventLoop: _eventLoop!,
               onClose: () => setState(() => _showUiPanel = false),
+              svgHostApi: widget.svgHostApi,
             ),
           ),
         ],
@@ -564,6 +589,7 @@ class _MontyIdeState extends State<MontyIde> {
 
   @override
   void dispose() {
+    widget.svgHostApi?.removeListener(_onSvgRendered);
     _saveTimer?.cancel();
     _runBannerDelay?.cancel();
     _editorController.dispose();
