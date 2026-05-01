@@ -525,13 +525,17 @@ print(f"Final score: {score} / {asked}")
 ''',
   );
   // HHG examples are canonical demos — always overwrite so updates
-  // ship. Don't edit these in the IDE; edit `_hhgDataframeScript`,
-  // `_hhgDuckdbScript`, `_hhgDataPillarsScript` below and rebuild.
+  // ship. Don't edit these in the IDE; edit the script constants
+  // below and rebuild.
   await vfs.writeFile('examples/06_hhg_dataframe.py', _hhgDataframeScript);
   await vfs.writeFile('examples/07_hhg_duckdb.py', _hhgDuckdbScript);
   await vfs.writeFile(
     'examples/08_hhg_data_pillars.py',
     _hhgDataPillarsScript,
+  );
+  await vfs.writeFile(
+    'examples/09_hhg_duckdb_spatial.py',
+    _hhgDuckdbSpatialScript,
   );
 
   final files = await vfs.listFiles();
@@ -774,4 +778,121 @@ print("Rendered SVG via SvgExtension; check the line above for the host preview.
 
 # Last expression = the IDE return value.
 {"regions": regions, "values": values}
+''';
+
+const _hhgDuckdbSpatialScript = r'''
+# HHG: DuckDB-spatial — relationship operations for soliplex-style
+# scripts. Spatial joins, point-in-polygon, proximity, nearest-N,
+# polygon overlap. The kind of geo work where the script returns
+# data and the host UI renders.
+#
+# First Run on macOS native may pop a Gatekeeper prompt for the
+# unsigned spatial.duckdb_extension binary — Allow Anyway in System
+# Settings > Privacy & Security and re-run. On Chrome the extension
+# is fetched from the duckdb-wasm CDN; no signing, no popup.
+requires(["duck_execute", "duck_query"])
+
+duck_execute("INSTALL spatial")
+duck_execute("LOAD spatial")
+print("Spatial extension loaded")
+
+# Service zones — polygons in WGS84 (made-up boxes around NYC).
+duck_execute("""
+CREATE OR REPLACE TABLE zones (name VARCHAR, geom GEOMETRY)
+""")
+duck_execute("""
+INSERT INTO zones VALUES
+    ('downtown',   ST_GeomFromText('POLYGON((-74.02 40.70, -73.97 40.70, -73.97 40.78, -74.02 40.78, -74.02 40.70))')),
+    ('airport',    ST_GeomFromText('POLYGON((-73.79 40.63, -73.76 40.63, -73.76 40.66, -73.79 40.66, -73.79 40.63))')),
+    ('industrial', ST_GeomFromText('POLYGON((-74.02 40.65, -73.97 40.65, -73.97 40.69, -74.02 40.69, -74.02 40.65))'))
+""")
+
+# A small fleet of vehicles — points.
+duck_execute("""
+CREATE OR REPLACE TABLE vehicles (plate VARCHAR, geom GEOMETRY)
+""")
+duck_execute("""
+INSERT INTO vehicles VALUES
+    ('V-101', ST_Point(-73.99, 40.74)),
+    ('V-102', ST_Point(-73.78, 40.65)),
+    ('V-103', ST_Point(-74.00, 40.67)),
+    ('V-104', ST_Point(-73.95, 40.80)),
+    ('V-105', ST_Point(-73.99, 40.75))
+""")
+
+# Two pickups waiting for rides.
+duck_execute("""
+CREATE OR REPLACE TABLE pickups (id VARCHAR, geom GEOMETRY)
+""")
+duck_execute("""
+INSERT INTO pickups VALUES
+    ('P-1', ST_Point(-74.00, 40.74)),
+    ('P-2', ST_Point(-73.78, 40.65))
+""")
+
+# 1. Spatial join — which vehicle is in which zone? (ST_Within)
+in_zone = duck_query("""
+SELECT v.plate, z.name AS zone
+FROM vehicles v
+JOIN zones z ON ST_Within(v.geom, z.geom)
+ORDER BY v.plate
+""")
+print("Vehicles in zones: " + str(in_zone))
+
+# 2. Vehicles outside every zone (anti-join via NOT EXISTS).
+unzoned = duck_query("""
+SELECT v.plate
+FROM vehicles v
+WHERE NOT EXISTS (
+    SELECT 1 FROM zones z WHERE ST_Within(v.geom, z.geom)
+)
+ORDER BY v.plate
+""")
+print("Vehicles outside zones: " + str(unzoned))
+
+# 3. Vehicles within 3 km of each pickup. ST_Distance_Sphere returns
+# meters between two WGS84 points (great-circle approximation).
+nearby = duck_query("""
+SELECT
+    p.id AS pickup,
+    v.plate,
+    round(ST_Distance_Sphere(p.geom, v.geom), 0) AS meters
+FROM pickups p
+JOIN vehicles v ON ST_Distance_Sphere(p.geom, v.geom) < 3000
+ORDER BY p.id, meters
+""")
+print("Within 3 km of each pickup: " + str(nearby))
+
+# 4. Nearest-vehicle per pickup (correlated subquery).
+closest = duck_query("""
+SELECT
+    p.id AS pickup,
+    (SELECT v.plate
+     FROM vehicles v
+     ORDER BY ST_Distance_Sphere(p.geom, v.geom)
+     LIMIT 1) AS closest_plate
+FROM pickups p
+ORDER BY p.id
+""")
+print("Closest vehicle: " + str(closest))
+
+# 5. Zone topology — pairs that overlap (none in this dataset, but
+# the query is the soliplex-style boilerplate for "which areas
+# share territory").
+overlaps = duck_query("""
+SELECT a.name AS zone_a, b.name AS zone_b
+FROM zones a
+JOIN zones b ON a.name < b.name AND ST_Intersects(a.geom, b.geom)
+ORDER BY a.name, b.name
+""")
+print("Overlapping zone pairs: " + str(overlaps))
+
+# Last expression = the IDE return value. GeoJSON of every vehicle,
+# ready for any downstream map renderer (soliplex frontend, future
+# hhg_map, anything that consumes GeoJSON FeatureCollections).
+duck_query("""
+SELECT plate, ST_AsGeoJSON(geom) AS geom_geojson
+FROM vehicles
+ORDER BY plate
+""")
 ''';
