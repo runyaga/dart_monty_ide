@@ -6,6 +6,12 @@
 	<true/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
+	<!-- Allow loading the unsigned spatial.duckdb_extension dylib that
+	     DuckDB downloads on first INSTALL spatial. Without this the
+	     hardened runtime rejects it with "library load disallowed by
+	     system policy". -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
