@@ -1,67 +1,65 @@
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
-import 'package:file/file.dart';
-import 'package:file/memory.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
 
 /// A [MontyVfs] implementation that lives in memory.
+///
+/// Intentionally a plain `Map<String, String>` — no `package:file` /
+/// `package:path` dependency. Earlier versions used `MemoryFileSystem`,
+/// but its compiled-JS / dart2wasm behaviour on GitHub Pages produced
+/// `FileSystemException` errors with the URL base path leaking into
+/// the file path (e.g. `path = 'dart_monty_ide'`). A simple map sidesteps
+/// the entire path-resolution surface.
 class MemoryMontyVfs implements MontyVfs {
-  /// Creates a [MemoryMontyVfs].
-  MemoryMontyVfs({
-    FileSystem? fs,
-  }) : _fs = fs ?? MemoryFileSystem();
+  MemoryMontyVfs();
 
-  final FileSystem _fs;
-  final String _rootPath = '/';
+  final Map<String, String> _files = <String, String>{};
+
+  String _normalise(String path) {
+    // Drop leading slashes so callers can use `/foo.py` or `foo.py`.
+    var p = path;
+    while (p.startsWith('/')) {
+      p = p.substring(1);
+    }
+    return p;
+  }
 
   @override
   Future<List<String>> listFiles() async {
-    final files = <String>[];
-    final root = _fs.directory(_rootPath);
-    if (!await root.exists()) {
-      await root.create(recursive: true);
-    }
-
-    await for (final entity in root.list(recursive: true)) {
-      if (entity is File &&
-          (entity.path.endsWith('.py') || entity.path.endsWith('.txt'))) {
-        files.add(p.relative(entity.path, from: _rootPath));
-      }
-    }
-    return files;
+    return _files.keys
+        .where((p) => p.endsWith('.py') || p.endsWith('.txt'))
+        .toList()
+      ..sort();
   }
 
   @override
   Future<String> readFile(String path) async {
-    final file = _fs.file(p.join(_rootPath, path));
-    return file.readAsString();
+    final key = _normalise(path);
+    final content = _files[key];
+    if (content == null) {
+      throw StateError('File not found: $path');
+    }
+    return content;
   }
 
   @override
   Future<void> writeFile(String path, String content) async {
-    final fullPath = p.join(_rootPath, path);
-    final file = _fs.file(fullPath);
-    debugPrint('MemoryMontyVfs: Writing ${content.length} bytes to $fullPath');
-    if (!await file.parent.exists()) {
-      await file.parent.create(recursive: true);
-    }
-    await file.writeAsString(content);
-    debugPrint('MemoryMontyVfs: Write complete.');
+    final key = _normalise(path);
+    debugPrint('MemoryMontyVfs: Writing ${content.length} bytes to $key');
+    _files[key] = content;
   }
 
   @override
   Future<void> deleteFile(String path) async {
-    final file = _fs.file(p.join(_rootPath, path));
-    if (await file.exists()) {
-      await file.delete();
-    }
+    _files.remove(_normalise(path));
   }
 
   @override
   Future<void> renameFile(String oldPath, String newPath) async {
-    final file = _fs.file(p.join(_rootPath, oldPath));
-    if (await file.exists()) {
-      await file.rename(p.join(_rootPath, newPath));
+    final oldKey = _normalise(oldPath);
+    final newKey = _normalise(newPath);
+    final content = _files.remove(oldKey);
+    if (content != null) {
+      _files[newKey] = content;
     }
   }
 }

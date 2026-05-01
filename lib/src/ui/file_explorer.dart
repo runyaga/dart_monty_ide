@@ -133,7 +133,10 @@ class _FileExplorerState extends State<FileExplorer> {
                       style: const TextStyle(fontSize: 13),
                     ),
                     dense: true,
-                    onTap: () => widget.onFileSelected(file),
+                    onTap: () {
+                      debugPrint('[FileExplorer] tapped: $file');
+                      widget.onFileSelected(file);
+                    },
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, size: 16),
                       onPressed: () async {

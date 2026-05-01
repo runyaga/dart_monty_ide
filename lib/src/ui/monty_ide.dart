@@ -230,29 +230,34 @@ class _MontyIdeState extends State<MontyIde> {
 
   Future<void> _initController() async {
     if (!_controller.isInitialized) await _controller.initialize();
-    // Auto-load onboarding.txt on app launch if it exists, so a fresh
-    // user lands with the welcome doc open instead of an empty editor.
     if (_currentFilePath != null) return;
     try {
       final files = await widget.vfs.listFiles();
+      debugPrint('[_initController] vfs files = $files');
       if (files.contains('onboarding.txt')) {
+        debugPrint('[_initController] auto-loading onboarding.txt');
         await _loadFile('onboarding.txt');
+      } else {
+        debugPrint('[_initController] onboarding.txt NOT in file list');
       }
-    } catch (_) {
-      // Best-effort — silently fall through to an empty editor.
+    } catch (e, st) {
+      debugPrint('[_initController] ERROR: $e\n$st');
     }
   }
 
   Future<void> _loadFile(String path) async {
+    debugPrint('[_loadFile] path=$path');
     try {
       final content = await widget.vfs.readFile(path);
+      debugPrint('[_loadFile] read ${content.length} bytes');
       setState(() {
         _currentFilePath = path;
         _editorController.text = content;
         _viewingAssistantBuffer = false;
       });
-    } catch (e) {
-      debugPrint('Error loading: $e');
+      debugPrint('[_loadFile] setState done; editor.text length=${_editorController.text.length}');
+    } catch (e, st) {
+      debugPrint('[_loadFile] ERROR for $path: $e\n$st');
     }
   }
 
