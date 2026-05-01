@@ -3,8 +3,11 @@ import 'package:dart_monty_ide/dart_monty_ide.dart';
 import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
 import 'package:dart_monty_ide/src/assistant/system_prompt_builder.dart';
 import 'package:dart_monty_ide/src/bridge/flutter_extension.dart';
+import 'package:dart_monty_ide/src/bridge/llm_extension.dart';
 import 'package:dart_monty_ide/src/bridge/prompt_extension.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
+import 'package:dart_monty_ide/src/llm/llm_service.dart';
+import 'package:dart_monty_ide/src/llm/ollama_service.dart';
 import 'package:dart_monty_ide/src/vfs/local_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/memory_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
@@ -29,11 +32,25 @@ void main() async {
   // are recreated by the factory on each clearState(), because some — e.g.
   // EventLoopExtension — are one-shot and cannot be reused after dispose.
   final registry = WidgetRegistry();
+  // Shared LLM config for the pilot_ask host function. Higher temperature
+  // than the chat panel's default — pilot_ask is mostly used for creative
+  // generation (text adventures, trivia, magic 8-balls).
+  final llmConfig = LlmConfig(
+    provider: LlmProvider.ollama,
+    baseUrl: 'http://localhost:11434',
+    model: 'gpt-oss:20b',
+    temperature: 0.7,
+  );
+
   List<MontyExtension> extensionsFactory() {
     final flutterExt = MontyFlutterExtension(registry);
     final eventLoopExt = EventLoopExtension();
     final promptExt = MontyPromptExtension();
-    final exts = <MontyExtension>[flutterExt, eventLoopExt, promptExt];
+    final llmExt = MontyLlmExtension(
+      service: OllamaLlmService(),
+      config: llmConfig,
+    );
+    final exts = <MontyExtension>[flutterExt, eventLoopExt, promptExt, llmExt];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
           basePrompt: defaultAssistantPrompt,
           extensions: exts,
@@ -143,69 +160,39 @@ Have fun.
     'def hi(name: str) -> str:\n    return f"hello {name}"\n\nprint(hi("Monty"))\n',
   );
   await seed(
-    'examples/01_basics.py',
-    'def welcome(name: str) -> str:\n'
-        '    return f"Greetings, {name}!"\n\n'
-        'print(welcome("Engineer"))\n',
-  );
-  await seed(
-    'examples/02_logic.py',
-    'numbers: list[int] = [1, 2, 3, 4, 5]\n'
-        'print(f"Squares: {[n**2 for n in numbers]}")\n',
-  );
-  await seed(
-    'examples/03_gui.py',
-    'import json\n'
-        'print("🎨 Updating Flutter widgets...")\n'
-        'flutter_set_color("box_1", "teal")\n'
-        'flutter_set_prop("label_1", "text", "Updated from Monty Python!")\n'
-        'flutter_set_color("ide_run_button", "orange")\n'
-        'print("Done.")\n',
-  );
-  await seed(
-    'examples/05_gui_temp.py',
-    '# Temperature converter — drag the slider or click a preset.\n'
-        '# Open the "Monty UI" panel before running.\n'
-        'prompt_extend(\n'
-        '    "Script: Temperature converter using a Celsius slider (-50..150) "\n'
-        '    "and freeze/body/boil preset buttons. Show °C, °F, K side-by-side. "\n'
-        '    "Quit handler is wired. Help me iterate on logic, not layout."\n'
-        ')\n'
-        'celsius = 20.0\n'
+    'examples/01_python_tour.py',
+    '"""A short tour of Monty\'s Python subset.\n'
+        'Typed functions, comprehensions, f-strings, slicing, error handling.\n'
+        'Records are dicts — Monty restricts plain `class`."""\n'
         '\n'
-        'while True:\n'
-        '    fahrenheit = celsius * 9 / 5 + 32\n'
-        '    kelvin = celsius + 273.15\n'
-        '    el_emit({\n'
-        '        "type": "column",\n'
-        '        "children": [\n'
-        '            {"type": "text", "value": "🌡️  Temperature Converter", "size": 18},\n'
-        '            {"type": "slider", "id": "c", "label": "Celsius", "min": -50, "max": 150, "value": celsius},\n'
-        '            {"type": "text", "value": f"{round(celsius, 1)}°C  =  {round(fahrenheit, 1)}°F  =  {round(kelvin, 1)} K", "size": 14},\n'
-        '            {"type": "row", "children": [\n'
-        '                {"type": "button", "id": "freeze", "label": "Freezing (0°C)"},\n'
-        '                {"type": "button", "id": "body", "label": "Body (37°C)"},\n'
-        '                {"type": "button", "id": "boil", "label": "Boiling (100°C)"},\n'
-        '            ]},\n'
-        '        ],\n'
-        '    })\n'
-        '    evt = el_recv()\n'
-        '    if evt["type"] == "quit":\n'
-        '        break\n'
-        '    target = evt["target"]\n'
-        '    if target == "c":\n'
-        '        celsius = evt["value"]\n'
-        '    elif target == "freeze":\n'
-        '        celsius = 0.0\n'
-        '    elif target == "body":\n'
-        '        celsius = 37.0\n'
-        '    elif target == "boil":\n'
-        '        celsius = 100.0\n'
+        'people: list[dict] = [\n'
+        '    {"name": "Alice", "age": 30},\n'
+        '    {"name": "Bob",   "age": 25},\n'
+        '    {"name": "Carol", "age": 41},\n'
+        '    {"name": "Dan",   "age": 17},\n'
+        ']\n'
         '\n'
-        'print(f"Final: {round(celsius, 1)}°C")\n',
+        'adults: list[dict] = [p for p in people if p["age"] >= 18]\n'
+        'by_age: dict[int, str] = {p["age"]: p["name"] for p in adults}\n'
+        '\n'
+        'print(f"People: {len(people)}, adults: {len(adults)}")\n'
+        'print(f"By age (adults only): {by_age}")\n'
+        'print(f"First two names: {[p[\'name\'] for p in people[:2]]}")\n'
+        '\n'
+        '\n'
+        'def safe_divide(a: int, b: int) -> float | None:\n'
+        '    try:\n'
+        '        return a / b\n'
+        '    except ZeroDivisionError as e:\n'
+        '        print(f"oops: {e}")\n'
+        '        return None\n'
+        '\n'
+        '\n'
+        'print(f"10 / 3 = {safe_divide(10, 3)}")\n'
+        'print(f"10 / 0 = {safe_divide(10, 0)}")\n',
   );
   await seed(
-    'examples/04_gui_counter.py',
+    'examples/02_gui_counter.py',
     '# Open the "Monty UI" panel from the toolbar before running.\n'
         'count = 0\n'
         '\n'
@@ -239,12 +226,13 @@ Have fun.
         'print(f"Final count: {count}")\n',
   );
   await seed(
-    'examples/06_thermostat.py',
+    'examples/03_gui_thermostat.py',
     'prompt_extend(\n'
-        '    "Thermostat: target temperature slider (10..32 °C), Heat / Cool / Off "\n'
-        '    "mode buttons, fan-speed slider (1..5), and a Step button that advances "\n'
-        '    "the simulated room temperature toward the target according to mode + "\n'
-        '    "fan speed. Help me iterate on the control logic, not the layout."\n'
+        '    "Thermostat: target temperature slider in Celsius (range 0..50), "\n'
+        '    "Heat / Cool / Off mode buttons, fan-speed slider (1..5), and a "\n'
+        '    "Step button that advances the simulated room temperature toward "\n'
+        '    "the target. If the user gives a Fahrenheit value (e.g. 103 °F), "\n'
+        '    "convert: C = (F - 32) * 5 / 9 and clamp to 0..50."\n'
         ')\n'
         '\n'
         'target = 20.0\n'
@@ -278,7 +266,7 @@ Have fun.
         '            {"type": "text", "value": "🏠 Thermostat", "size": 18},\n'
         '            {"type": "text", "value": target_label, "size": 14},\n'
         '            {"type": "slider", "id": "target", "label": "Target",\n'
-        '             "min": 10, "max": 32, "value": target},\n'
+        '             "min": 0, "max": 50, "value": target},\n'
         '            {"type": "text", "value": current_label, "size": 14},\n'
         '            {"type": "text", "value": status, "size": 14},\n'
         '            {"type": "row", "children": [\n'
@@ -319,6 +307,131 @@ Have fun.
         '            current = current - rate\n'
         '            if current < target:\n'
         '                current = target\n',
+  );
+  await seed(
+    'examples/04_llm_text_adventure.py',
+    '# REQUIRES OLLAMA: this script calls pilot_ask(...) for narrative.\n'
+        '# Each click of "Continue" sends the running story to the LLM and\n'
+        '# appends what comes back. Type a custom action to steer the plot.\n'
+        'prompt_extend(\n'
+        '    "Text adventure: the script calls pilot_ask() to continue a "\n'
+        "    \"branching narrative. Don't drive this with ui_dispatch — let the user play.\"\n"
+        ')\n'
+        '\n'
+        'story: str = "You are standing in a dusty library, three doors before you. The brass door hums faintly."\n'
+        'last_action: str = ""\n'
+        '\n'
+        'while True:\n'
+        '    el_emit({\n'
+        '        "type": "column",\n'
+        '        "children": [\n'
+        '            {"type": "text", "value": "📖 Monty Adventure", "size": 18},\n'
+        '            {"type": "text", "value": story},\n'
+        '            {"type": "text_field", "id": "action", "value": last_action,\n'
+        '             "hint": "What do you do? (or just press Continue)"},\n'
+        '            {"type": "row", "children": [\n'
+        '                {"type": "button", "id": "continue", "label": "Continue"},\n'
+        '                {"type": "button", "id": "restart", "label": "Restart"},\n'
+        '            ]},\n'
+        '        ],\n'
+        '    })\n'
+        '    evt = el_recv()\n'
+        '    if evt["type"] == "quit":\n'
+        '        break\n'
+        '    target = evt["target"]\n'
+        '    if target == "action" and evt["type"] == "submit":\n'
+        '        last_action = evt["value"]\n'
+        '    elif target == "restart":\n'
+        '        story = "You are standing in a dusty library, three doors before you. The brass door hums faintly."\n'
+        '        last_action = ""\n'
+        '    elif target == "continue":\n'
+        '        action_text = last_action if last_action else "the player waits"\n'
+        '        prompt = (\n'
+        '            "You are the narrator of a short, atmospheric text adventure. "\n'
+        '            "Continue the story with ONE short paragraph (2-3 sentences). "\n'
+        '            "End by hinting at 2-3 possible next actions. "\n'
+        '            "Story so far: " + story + "\\n"\n'
+        '            "Player action: " + action_text\n'
+        '        )\n'
+        '        next_chunk = pilot_ask(prompt)\n'
+        '        story = story + "\\n\\n" + next_chunk.strip()\n'
+        '        last_action = ""\n'
+        '\n'
+        'print("THE END")\n',
+  );
+  await seed(
+    'examples/05_llm_trivia.py',
+    '# REQUIRES OLLAMA: this script generates trivia via pilot_ask(...).\n'
+        '# Click "New question" — the LLM produces Q + 4 options. Pick one;\n'
+        '# the script asks the LLM to judge.\n'
+        'prompt_extend(\n'
+        '    "Trivia: the script calls pilot_ask() to generate a question and "\n'
+        '    "to grade the user\'s answer. Score is kept in Python state."\n'
+        ')\n'
+        '\n'
+        'import json\n'
+        '\n'
+        'score: int = 0\n'
+        'asked: int = 0\n'
+        'question: str = "Click \\"New question\\" to begin."\n'
+        'options: list[str] = ["A", "B", "C", "D"]\n'
+        'feedback: str = ""\n'
+        'last_correct: str = ""\n'
+        '\n'
+        'def fetch_question() -> dict:\n'
+        '    raw = pilot_ask(\n'
+        '        \'Generate a single trivia question. Return ONLY valid JSON \'\n'
+        '        \'with these keys: "q" (the question, string), "options" (list \'\n'
+        '        \'of 4 short strings, no labels), "answer" (one of the option \'\n'
+        '        \'strings, exactly matching). No markdown, no preamble.\'\n'
+        '    )\n'
+        '    try:\n'
+        '        return json.loads(raw)\n'
+        '    except json.JSONDecodeError:\n'
+        '        return {"q": "(parse error)", "options": ["A", "B", "C", "D"], "answer": "A"}\n'
+        '\n'
+        'while True:\n'
+        '    score_label = "Score: " + str(score) + " / " + str(asked)\n'
+        '    el_emit({\n'
+        '        "type": "column",\n'
+        '        "children": [\n'
+        '            {"type": "text", "value": "🧠 Monty Trivia", "size": 18},\n'
+        '            {"type": "text", "value": score_label, "size": 12},\n'
+        '            {"type": "text", "value": question, "size": 14},\n'
+        '            {"type": "row", "children": [\n'
+        '                {"type": "button", "id": "opt0", "label": options[0]},\n'
+        '                {"type": "button", "id": "opt1", "label": options[1]},\n'
+        '            ]},\n'
+        '            {"type": "row", "children": [\n'
+        '                {"type": "button", "id": "opt2", "label": options[2]},\n'
+        '                {"type": "button", "id": "opt3", "label": options[3]},\n'
+        '            ]},\n'
+        '            {"type": "text", "value": feedback, "size": 12},\n'
+        '            {"type": "button", "id": "next", "label": "New question"},\n'
+        '        ],\n'
+        '    })\n'
+        '    evt = el_recv()\n'
+        '    if evt["type"] == "quit":\n'
+        '        break\n'
+        '    target = evt["target"]\n'
+        '    if target == "next":\n'
+        '        feedback = "Thinking..."\n'
+        '        q = fetch_question()\n'
+        '        question = q["q"]\n'
+        '        options = q["options"]\n'
+        '        last_correct = q["answer"]\n'
+        '        feedback = ""\n'
+        '    elif target.startswith("opt"):\n'
+        '        idx = int(target[3:])\n'
+        '        picked = options[idx]\n'
+        '        asked = asked + 1\n'
+        '        if picked == last_correct:\n'
+        '            score = score + 1\n'
+        '            feedback = "✅ Correct!"\n'
+        '        else:\n'
+        '            feedback = "❌ Wrong. Answer: " + last_correct\n'
+        '\n'
+        'print("Final score: " + str(score) + " / " + str(asked))\n',
   );
 
   final files = await vfs.listFiles();
