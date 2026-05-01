@@ -285,11 +285,16 @@ class _MontyIdeState extends State<MontyIde> {
     }
   }
 
+  /// Strict mode: when on, Run pre-typechecks via Monty.typeCheck
+  /// against the auto-generated host-function stubs. Type errors abort
+  /// before execution. Toggle in the toolbar (rule_folded icon).
+  bool _strictMode = false;
+
   void _handleRun() {
     final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
     // Each Run is a fresh take — drop any prompt fragments the prior script registered.
     _promptExtension?.clear();
-    unawaited(_controller.execute(code));
+    unawaited(_controller.execute(code, strict: _strictMode));
   }
 
   Future<void> _handleAssistantSendMessage(String prompt) async {
@@ -522,6 +527,18 @@ class _MontyIdeState extends State<MontyIde> {
             const SizedBox(width: 8),
             if (_isSaving) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
             IconButton(visualDensity: VisualDensity.compact, onPressed: _handleRun, icon: const Icon(Icons.play_arrow, color: Colors.green, size: 20), tooltip: 'Run'),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _strictMode = !_strictMode),
+              icon: Icon(
+                _strictMode ? Icons.shield : Icons.shield_outlined,
+                color: _strictMode ? Colors.green.shade800 : Colors.grey,
+                size: 20,
+              ),
+              tooltip: _strictMode
+                  ? 'Strict mode ON — Run will type-check first'
+                  : 'Strict mode OFF — Run executes without typechecking',
+            ),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () {
               final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
               unawaited(_controller.typeCheck(code));

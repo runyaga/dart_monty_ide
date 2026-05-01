@@ -86,10 +86,17 @@ class MontyIdeController extends ChangeNotifier {
   ///
   /// Returns the [MontyResult] of the execution.
   /// Results and print outputs are also emitted to the [output] stream unless [silent] is true.
+  ///
+  /// When [strict] is `true`, runs `Monty.typeCheck` against the
+  /// auto-generated host-function stubs **before** execution; if it
+  /// reports any errors, the interpreter is not started, the errors
+  /// are emitted to [output] (when not [silent]), and the call returns
+  /// `null`. Default `false` preserves today's permissive behaviour.
   Future<MontyResult?> execute(
     String code, {
     bool clear = true,
     bool silent = false,
+    bool strict = false,
   }) async {
     if (!_isInitialized) {
       throw StateError(
@@ -102,6 +109,42 @@ class MontyIdeController extends ChangeNotifier {
     if (!silent) {
       lastErrorLine = null;
       notifyListeners();
+    }
+
+    if (strict) {
+      try {
+        final prefix = extensionsToPrefixCode(
+          _extensions ?? const [],
+          returnTypeOverrides: hhgReturnTypeOverrides,
+        );
+        final errors = await Monty.typeCheck(code, prefixCode: prefix);
+        if (errors.isNotEmpty) {
+          if (!silent) {
+            _outputController.add(
+              '🛑 Strict mode: refusing to run, '
+              '${errors.length} type error(s):\n',
+            );
+            for (final e in errors) {
+              _outputController.add(
+                '❌ [${e.code}] Line ${e.line}, Col ${e.column}: '
+                '${e.message}\n',
+              );
+            }
+            lastErrorLine = errors.first.line;
+            notifyListeners();
+          }
+          _isExecuting = false;
+          if (!silent) notifyListeners();
+          return null;
+        }
+      } on Exception catch (e) {
+        if (!silent) {
+          _outputController.add('⚠️ Strict typecheck engine error: $e\n');
+        }
+        _isExecuting = false;
+        if (!silent) notifyListeners();
+        return null;
+      }
     }
 
     try {

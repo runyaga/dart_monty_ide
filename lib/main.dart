@@ -537,6 +537,10 @@ print(f"Final score: {score} / {asked}")
     'examples/09_hhg_duckdb_spatial.py',
     _hhgDuckdbSpatialScript,
   );
+  await vfs.writeFile(
+    'examples/10_hhg_strict.py',
+    _hhgStrictScript,
+  );
 
   final files = await vfs.listFiles();
   bool shouldUpdate = !files.contains('system_prompt.txt');
@@ -895,4 +899,37 @@ SELECT plate, ST_AsGeoJSON(geom) AS geom_geojson
 FROM vehicles
 ORDER BY plate
 """)
+''';
+
+const _hhgStrictScript = r'''
+# HHG: strict-mode demo. Toggle the shield icon in the toolbar.
+#
+# Strict ON:  Run pre-typechecks via Monty.typeCheck against the
+#             auto-generated host-function stubs. The deliberately
+#             wrong call below — passing a string where df_filter
+#             expects a dict — is rejected before the interpreter
+#             starts. Console shows a structured type error.
+#
+# Strict OFF: Same script runs. df_filter's handler eventually
+#             throws FormatException at runtime — same bug, but
+#             you find out later and the message is less precise.
+#
+# Strict mode is the contract that makes append-only naming
+# trustworthy: signatures change → typecheck catches → no
+# silent breakage.
+requires(["df_from_records", "df_filter"])
+
+records = [
+    {"city": "NYC", "n": 5},
+    {"city": "LA",  "n": 3},
+    {"city": "NYC", "n": 7},
+]
+df = df_from_records(records)
+print("Loaded " + str(len(records)) + " records")
+
+# Deliberate type error: df_filter's `where` parameter is declared
+# `dict` in the auto-generated stub, but we pass a string literal.
+# Strict typecheck flags this; without strict, dispatch fails at
+# runtime with a less precise error.
+df_filter(df, where="this should be a dict")
 ''';
