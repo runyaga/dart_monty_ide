@@ -13,6 +13,8 @@ dependencies:
     path: ../dart_monty
   dart_monty_core:
     path: ../dart_monty_core
+  dart_monty_hhg:
+    path: ../dart_monty_labs/packages/dart_monty_hhg
   file: ^7.0.0
   flutter:
     sdk: flutter

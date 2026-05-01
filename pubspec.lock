@@ -127,6 +127,13 @@ packages:
       relative: true
     source: path
     version: "0.17.0"
+  dart_monty_hhg:
+    dependency: "direct main"
+    description:
+      path: "../dart_monty_labs/packages/dart_monty_hhg"
+      relative: true
+    source: path
+    version: "0.0.1"
   dinja:
     dependency: transitive
     description:

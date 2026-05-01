@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dart_monty/dart_monty.dart';
 import 'package:dart_monty/dart_monty_bridge.dart';
+import 'package:dart_monty_hhg/dart_monty_hhg.dart';
 import 'package:flutter/foundation.dart';
 
 /// Controller for the Monty IDE.
@@ -226,7 +227,10 @@ class MontyIdeController extends ChangeNotifier {
     _outputController.add('--- Analysis Started ---\n');
     try {
       _outputController.add('🔍 Checking types...\n');
-      final prefix = buildHostStubs(_extensions);
+      final prefix = extensionsToPrefixCode(
+        _extensions ?? const [],
+        returnTypeOverrides: hhgReturnTypeOverrides,
+      );
       final errors = await Monty.typeCheck(code, prefixCode: prefix);
       if (errors.isEmpty) {
         _outputController.add('✅ Analysis complete: No errors found.\n');
@@ -245,48 +249,18 @@ class MontyIdeController extends ChangeNotifier {
     }
   }
 
-  /// Synthesizes a Monty/Python preamble that declares stubs for every host
-  /// function exposed by [extensions], so [Monty.typeCheck] resolves names
-  /// like `el_emit`, `flutter_set_prop`, `prompt_extend`.
+  /// Return-type overrides for non-HHG-authored extensions whose source
+  /// we can't change but whose return type we know.
   ///
-  /// Param types are mapped from [HostParamType]; return types default to
-  /// `object` with a small override table for functions whose return shape
-  /// the schema can't currently express (e.g. `el_recv -> dict`). When
-  /// dart_monty grows a return-type field we can drop the overrides.
-  static String buildHostStubs(List<MontyExtension>? extensions) {
-    if (extensions == null || extensions.isEmpty) return '';
-    const returnOverrides = <String, String>{
-      'el_recv': 'dict',
-    };
-    String pyParamType(HostParamType t) => switch (t) {
-          HostParamType.string => 'str',
-          HostParamType.integer => 'int',
-          HostParamType.number => 'float',
-          HostParamType.boolean => 'bool',
-          HostParamType.list => 'list',
-          HostParamType.map => 'dict',
-          HostParamType.any => 'object',
-        };
-    final buf = StringBuffer();
-    buf.writeln(
-      '# Auto-generated host-function stubs for Monty.typeCheck — do not edit.',
-    );
-    for (final ext in extensions) {
-      for (final fn in ext.functions) {
-        final name = fn.schema.name;
-        final params = fn.schema.params
-            .map((p) => '${p.name}: ${pyParamType(p.type)}')
-            .join(', ');
-        final ret = returnOverrides[name] ?? 'object';
-        // `raise NotImplementedError` types as Never, satisfying any return
-        // annotation — `...`/`pass` would be read as returning None.
-        buf.writeln(
-          'def $name($params) -> $ret: raise NotImplementedError',
-        );
-      }
-    }
-    return buf.toString();
-  }
+  /// Currently: `el_recv` from `dart_monty`'s built-in
+  /// `EventLoopExtension`. Drop entries here when their source grows
+  /// HHG-style return-type metadata.
+  ///
+  /// Shared by [typeCheck] above and `IdeToolHandler.typeCheck` so both
+  /// surfaces see the same enforcement.
+  static const Map<String, String> hhgReturnTypeOverrides = {
+    'el_recv': 'dict',
+  };
 
   /// Clears only the console output.
   void clearConsole() {

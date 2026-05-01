@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dart_monty/dart_monty.dart';
 import 'package:dart_monty/dart_monty_bridge.dart';
+import 'package:dart_monty_hhg/dart_monty_hhg.dart';
 import 'package:dart_monty_ide/src/assistant/assistant_tool_handler.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
@@ -27,7 +28,10 @@ class IdeToolHandler implements AssistantToolHandler {
     // Safe on scripts with infinite event loops (el_recv). Host function
     // stubs are passed as prefixCode so calls like el_emit/prompt_extend
     // resolve.
-    final prefix = MontyIdeController.buildHostStubs(ideController.extensions);
+    final prefix = extensionsToPrefixCode(
+      ideController.extensions ?? const [],
+      returnTypeOverrides: MontyIdeController.hhgReturnTypeOverrides,
+    );
     final errors = await Monty.typeCheck(code, prefixCode: prefix);
     if (errors.isEmpty) {
       return <String, dynamic>{'ok': true, 'errors': []};
