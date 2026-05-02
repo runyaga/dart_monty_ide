@@ -20,6 +20,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_dataframe/hhg_dataframe.dart';
 import 'package:hhg_duckdb/hhg_duckdb.dart';
+import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_svg/hhg_svg.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -88,6 +89,7 @@ void main() async {
     // can Allow Anyway in System Preferences > Privacy & Security.
     final duckDbExt = DuckDbExtension(autoLoadSpatial: false);
     final svgExt = SvgExtension(hostApi: svgHostApi);
+    final geoExt = GeoEngineExtension();
     final exts = <MontyExtension>[
       flutterExt,
       eventLoopExt,
@@ -96,6 +98,7 @@ void main() async {
       dataframeExt,
       duckDbExt,
       svgExt,
+      geoExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
           basePrompt: defaultAssistantPrompt,
