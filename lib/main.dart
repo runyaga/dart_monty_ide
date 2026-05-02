@@ -750,64 +750,62 @@ top_three
 ''';
 
 const _hhgDataPillarsScript = '''
-# HHG: all three pillars composed — duckdb + dataframe + svg.
-# DuckDB aggregates; dataframe round-trips the columnar wire format;
-# we hand-roll a tiny SVG bar chart and svg_render it.
-# The IDE's ConsoleSvgHostApi prints a one-line preview to the
-# console below — that's the visual confirmation in v1.
+# HHG v1 demo: duck_query → df_filter → svg_bar_chart → svg_render
+#
+# Three Holy Hand Grenades packages composed in ~30 lines of Python.
+# Works identically on FFI (native) and WASM (flutter run -d chrome):
+#  - duck_query aggregates inline data via DuckDB SQL
+#  - df_filter / df_select narrow the columnar frame
+#  - svg_bar_chart generates a chart string; svg_render hands it to the host
+#
+# The host prints the SVG path to the console (native) or a preview (web).
 requires([
-    "duck_execute", "duck_query",
-    "df_to_records",
-    "svg_render",
+    "duck_query",
+    "df_filter", "df_select",
+    "svg_bar_chart", "svg_render",
 ])
 
-duck_execute("CREATE OR REPLACE TABLE sales (region VARCHAR, sales INTEGER)")
-duck_execute("""
-INSERT INTO sales VALUES
-    ('W', 10), ('W', 20), ('E', 30), ('E', 40), ('W', 50)
+# 1. Pull + aggregate with DuckDB SQL (inline VALUES — no CSV needed).
+data = duck_query("""
+SELECT
+    region,
+    product,
+    SUM(sales) AS total_sales
+FROM (VALUES
+    ('West',  'Widgets',  1200),
+    ('West',  'Gadgets',   850),
+    ('East',  'Widgets',  2100),
+    ('East',  'Gadgets',   970),
+    ('North', 'Widgets',   780),
+    ('North', 'Gadgets',   540),
+    ('South', 'Widgets',   990),
+    ('South', 'Gadgets',   660)
+) AS t(region, product, sales)
+GROUP BY region, product
+ORDER BY region, total_sales DESC
 """)
-print("Loaded sales table")
+print("Loaded " + str(len(data["region"])) + " region × product rows")
 
-totals = duck_query("""
-SELECT region, sum(sales) AS total
-FROM sales
-GROUP BY region
-ORDER BY region
-""")
-print("Totals: " + str(totals))
+# 2. Narrow with dataframe verbs — keep only Widgets rows.
+widgets = df_filter(data, where={"product": "Widgets"})
+chart_df = df_select(widgets, columns=["region", "total_sales"])
+print("Widgets rows: " + str(len(chart_df["region"])))
 
-rows = df_to_records(totals)
-print("As records: " + str(rows))
+# 3. Render as a bar chart — one call, no SVG string-building required.
+chart_svg = svg_bar_chart(
+    chart_df["region"],
+    chart_df["total_sales"],
+    width=500,
+    height=320,
+    color="#4a90d9",
+    title="Widgets Sales by Region",
+)
 
-# Hand-roll a tiny SVG bar chart.
-regions = totals["region"]
-values  = totals["total"]
-max_v = max(values)
-bar_w = 30
-gap = 10
-chart_h = 60
-chart_w = (bar_w + gap) * len(regions) + gap
+svg_render(chart_svg)
+print("Chart rendered. Check the console above for the SVG file path.")
 
-bars = ""
-labels = ""
-i = 0
-for r in regions:
-    v = values[i]
-    h = (v / max_v) * chart_h
-    x = gap + i * (bar_w + gap)
-    y = chart_h - h
-    cx = x + bar_w / 2
-    bars = bars + '<rect x="' + str(x) + '" y="' + str(y) + '" width="' + str(bar_w) + '" height="' + str(h) + '" fill="steelblue"/>'
-    labels = labels + '<text x="' + str(cx) + '" y="' + str(chart_h + 12) + '" text-anchor="middle" font-size="10">' + r + '</text>'
-    labels = labels + '<text x="' + str(cx) + '" y="' + str(chart_h + 24) + '" text-anchor="middle" font-size="9">' + str(v) + '</text>'
-    i = i + 1
-
-svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + str(chart_w) + '" height="' + str(chart_h + 30) + '">' + bars + labels + '</svg>'
-svg_render(svg)
-print("Rendered SVG via SvgExtension; check the line above for the host preview.")
-
-# Last expression = the IDE return value.
-{"regions": regions, "values": values}
+# Last expression = the IDE return value (shown in console).
+chart_df
 ''';
 
 const _hhgDuckdbSpatialScript = '''

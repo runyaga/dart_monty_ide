@@ -13,9 +13,13 @@ import 'package:dart_monty_ide/src/llm/llm_service.dart';
 /// history. Each call is independent. If you need multi-turn, accumulate
 /// the prompt yourself.
 class MontyLlmExtension extends MontyExtension {
+  /// Creates a [MontyLlmExtension] backed by [service] and [config].
   MontyLlmExtension({required this.service, required this.config});
 
+  /// The LLM transport used to issue `pilot_ask` calls.
   final LlmService service;
+
+  /// The LLM configuration (base URL, model, temperature) for `pilot_ask`.
   final LlmConfig config;
 
   @override

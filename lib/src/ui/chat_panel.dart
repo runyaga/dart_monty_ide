@@ -25,23 +25,36 @@ class ChatMessage {
         .throttleTime(const Duration(milliseconds: 100), trailing: true);
   }
 
+  /// The role producing this message (`'user'`, `'assistant'`, `'tool'`).
   final String role;
+
+  /// Whether the message is rendered for UI feedback only (no LLM history).
   final bool isUiOnly;
+
+  /// Identifier of the tool call this message responds to, if any.
   final String? toolCallId;
+
+  /// Tool calls requested by the assistant in this message, if any.
   final List<LlmToolCall>? toolCalls;
   String _content;
 
+  /// The current accumulated text content of the message.
   String get content => _content;
 
-  final StreamController<String> _contentController = StreamController<String>.broadcast();
+  final StreamController<String> _contentController =
+      StreamController<String>.broadcast();
   late final Stream<String> _throttledStream;
+
+  /// Throttled stream of content updates suitable for streaming UI.
   Stream<String> get contentStream => _throttledStream;
 
+  /// Appends [text] to the message content and notifies listeners.
   void append(String text) {
     _content += text;
     _contentController.add(_content);
   }
 
+  /// Releases the underlying stream resources.
   void dispose() {
     unawaited(_contentController.close());
   }
@@ -68,18 +81,43 @@ class ChatPanel extends StatefulWidget {
     super.key,
   });
 
+  /// VFS used by the system-prompt viewer to read script fragments.
   final MontyVfs vfs;
+
+  /// Controller backing the IDE; used to read live host extensions.
   final MontyIdeController controller;
+
+  /// Controller that runs the verification loop for chat prompts.
   final AssistantController assistant;
+
+  /// Messages currently displayed in the chat history.
   final List<ChatMessage> messages;
+
+  /// Whether the assistant is currently streaming a response.
   final bool isStreaming;
+
+  /// Called when the user submits a chat prompt.
   final ValueChanged<String> onSendMessage;
+
+  /// Called when the user requests the in-flight assistant turn to stop.
   final VoidCallback onStop;
+
+  /// Called when the user copies a code block back into the editor.
   final ValueChanged<String> onCopyToEditor;
+
+  /// Called when the user closes the chat panel.
   final VoidCallback onClose;
+
+  /// Called when the user clears the chat history, if provided.
   final VoidCallback? onClearChat;
+
+  /// Sampling temperature for the LLM.
   final double temperature;
+
+  /// Called when the user adjusts [temperature] via the slider.
   final ValueChanged<double> onTemperatureChanged;
+
+  /// Free-form debug log displayed beneath the chat input.
   final String debugLog;
 
   /// Tri-state reachability: `null` = not yet probed, `true` = healthy,
