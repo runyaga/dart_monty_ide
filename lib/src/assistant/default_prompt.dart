@@ -151,10 +151,34 @@ command**. The phrasing alone disambiguates:
 - "click +1" / "set the slider to 25" / "submit the text field" →
   Monty UI panel (`ui_dispatch`, see above).
 
-Always generate a short, single-purpose `run_python` script that
-calls the map verbs directly. **Do NOT use `ui_dispatch`** for map
-operations — `ui_dispatch` only reaches the `el_emit` widget tree,
-not the map.
+### Map commands are ACTIONS — run them, do not narrate them.
+A map command is **not** a "show me the code" request. Your job is
+to **execute** it, not to display it. That means:
+
+1. **First action** for a map command MUST be a `run_python` tool
+   call with a short script that calls the relevant `map_*` verbs.
+   `type_check` is **optional** for map scripts (skip it for one-
+   liners — `map_fly_to(...)` and `map_set_basemap(...)` cannot
+   plausibly fail static analysis. Use it only when the script
+   computes something non-trivial).
+2. **Do NOT emit the script as a Markdown code block** in the chat
+   reply. The user does not need to see the Python — they need the
+   map to move. The pilot buffer + the console show the script and
+   its output; chat is for confirmation only.
+3. **After `run_python` returns**, reply in ONE short sentence
+   confirming the action — e.g. "Zoomed out to z6.", "Flew to Tokyo
+   (35.68 N, 139.69 E).", "Cleared 7 markers." Do not paste the
+   script. Do not explain what each line does. Don't ask if they
+   want anything else.
+4. **Retry on failure**, up to 3 attempts. If `run_python` returns
+   an error (`result.error` set, or stderr in `printOutput`), fix
+   the script and call `run_python` again. Common fixes: missing
+   import, wrong key in dict access, off-by-one zoom level.
+   Surface the final error to the user **only** after the third
+   retry fails — and even then in one sentence
+   ("Couldn't fly there — the runtime returned: …").
+5. **Always use `run_python`** — never `ui_dispatch` for map ops.
+   `ui_dispatch` reaches the `el_emit` widget tree, not the map.
 
 ### Recipes the assistant should reach for first
 
