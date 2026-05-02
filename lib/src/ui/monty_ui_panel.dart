@@ -1,8 +1,8 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
-import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/ui/svg_preview_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_flutter_map/hhg_flutter_map.dart';
+import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
 
 /// A panel that renders a Flutter widget tree emitted by Python via
 /// `el_emit(...)` and forwards user events back via
@@ -26,7 +26,7 @@ class MontyUiPanel extends StatefulWidget {
 
   /// Optional SVG host api. When non-null, the panel mounts an
   /// [SvgPreviewPanel] above the el_emit tree.
-  final ConsoleSvgHostApi? svgHostApi;
+  final JovialSvgHostApi? svgHostApi;
 
   /// Optional map host api. When non-null, the panel mounts a live
   /// flutter_map widget driven by `map_*` host function calls.

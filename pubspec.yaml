@@ -32,6 +32,8 @@ dependencies:
     path: ../dart_monty_labs-hhg-map/packages/hhg_map
   hhg_svg:
     path: ../dart_monty_labs/packages/hhg_svg
+  hhg_svg_jovial:
+    path: ../dart_monty_labs/packages/hhg_svg_jovial
   http: ^1.2.0
   jovial_svg: ^1.1.29
   markdown: ^7.3.1

@@ -4,7 +4,6 @@ import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/assistant.dart';
 import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
 import 'package:dart_monty_ide/src/assistant/system_prompt_builder.dart';
-import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/bridge/prompt_extension.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
@@ -18,6 +17,7 @@ import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_flutter_map/hhg_flutter_map.dart';
+import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
 import 'package:http/http.dart' as http;
 import 'package:re_editor/re_editor.dart';
 
@@ -44,7 +44,7 @@ class MontyIde extends StatefulWidget {
 
   /// Optional SVG host api to render `svg_render(...)` output in the
   /// editor area's preview panel. When `null`, no preview is shown.
-  final ConsoleSvgHostApi? svgHostApi;
+  final JovialSvgHostApi? svgHostApi;
 
   /// Optional map host api. When non-null, the UI panel mounts a map
   /// widget driven by `map_*` host function calls.

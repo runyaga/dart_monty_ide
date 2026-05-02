@@ -24,6 +24,7 @@ import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_map/hhg_map.dart';
 import 'package:hhg_svg/hhg_svg.dart';
+import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() async {
@@ -65,15 +66,26 @@ void main() async {
     temperature: 0.7,
   );
 
-  // The SvgHostApi takes a callback so it can be constructed before
-  // the controller exists (the factory below references the host api
-  // before the controller is built). The closure resolves the
-  // controller lazily; by the time `render(...)` fires, the controller
-  // has been assigned.
   late final MontyIdeController controller;
-  final svgHostApi = ConsoleSvgHostApi(
+
+  // JovialSvgHostApi is the primary SvgHostApi: parses SVG once at
+  // render time and exposes a pre-built ScalableImage for the preview
+  // panel.  ConsoleSvgHostApi is a side-effect: it writes the raw SVG
+  // to a temp file and logs the path to the IDE console.  We chain
+  // the two via a ChangeNotifier listener so SvgExtension only sees
+  // one host API.
+  final svgHostApi = JovialSvgHostApi();
+  final consoleSvg = ConsoleSvgHostApi(
     (line) => controller.appendOutput(line),
   );
+  svgHostApi.addListener(() {
+    final svg = svgHostApi.latestSvg;
+    if (svg != null) {
+      // Fire-and-forget: file I/O is a side effect, not a blocker.
+      // ignore: discarded_futures
+      consoleSvg.render(svg);
+    }
+  });
   final mapHostApi = FlutterMapHostApi();
 
   List<MontyExtension> extensionsFactory() {
@@ -621,7 +633,7 @@ class MyApp extends StatelessWidget {
 
   /// The host api the SVG preview panel watches for `svg_render(...)`
   /// output.
-  final ConsoleSvgHostApi svgHostApi;
+  final JovialSvgHostApi svgHostApi;
 
   /// The host api the map panel watches for `map_*` calls.
   final FlutterMapHostApi mapHostApi;
@@ -668,7 +680,7 @@ class MyHomePage extends StatelessWidget {
   final WidgetRegistry registry;
 
   /// SVG host api for the preview panel.
-  final ConsoleSvgHostApi svgHostApi;
+  final JovialSvgHostApi svgHostApi;
 
   /// Map host api for the map panel.
   final FlutterMapHostApi mapHostApi;

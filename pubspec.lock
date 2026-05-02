@@ -303,6 +303,13 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
+  hhg_svg_jovial:
+    dependency: "direct main"
+    description:
+      path: "../dart_monty_labs/packages/hhg_svg_jovial"
+      relative: true
+    source: path
+    version: "0.0.1"
   hooks:
     dependency: transitive
     description:
