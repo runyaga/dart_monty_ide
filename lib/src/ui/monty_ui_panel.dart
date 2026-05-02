@@ -9,6 +9,7 @@ import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 /// `EventLoopExtension.dispatch`. When a [svgHostApi] is supplied, also
 /// shows the latest `svg_render(...)` output above the tree.
 class MontyUiPanel extends StatefulWidget {
+  /// Creates a [MontyUiPanel] driven by [eventLoop].
   const MontyUiPanel({
     required this.eventLoop,
     required this.onClose,
@@ -17,7 +18,10 @@ class MontyUiPanel extends StatefulWidget {
     super.key,
   });
 
+  /// Event-loop extension this panel renders and dispatches events to.
   final EventLoopExtension eventLoop;
+
+  /// Called when the user closes the UI panel.
   final VoidCallback onClose;
 
   /// Optional SVG host api. When non-null, the panel mounts an

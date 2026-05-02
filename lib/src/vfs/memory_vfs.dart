@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 /// the file path (e.g. `path = 'dart_monty_ide'`). A simple map sidesteps
 /// the entire path-resolution surface.
 class MemoryMontyVfs implements MontyVfs {
+  /// Creates an empty in-memory VFS.
   MemoryMontyVfs();
 
   final Map<String, String> _files = <String, String>{};

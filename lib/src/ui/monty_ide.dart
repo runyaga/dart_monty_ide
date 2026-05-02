@@ -33,8 +33,13 @@ class MontyIde extends StatefulWidget {
     super.key,
   });
 
+  /// Virtual filesystem backing the file explorer and script loading.
   final MontyVfs vfs;
+
+  /// Optional pre-configured IDE controller; one is created if omitted.
   final MontyIdeController? controller;
+
+  /// Optional widget registry shared with the running script.
   final WidgetRegistry? registry;
 
   /// Optional SVG host api to render `svg_render(...)` output in the
