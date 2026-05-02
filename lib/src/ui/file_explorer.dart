@@ -39,7 +39,8 @@ class _FileExplorerState extends State<FileExplorer> {
   Future<void> _refresh() async {
     if (mounted) setState(() => _isLoading = true);
     try {
-      final files = await widget.vfs.listFiles();
+      final files = await widget.vfs.listFiles()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       if (mounted) {
         setState(() {
           _files = files;

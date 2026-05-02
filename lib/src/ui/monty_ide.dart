@@ -91,6 +91,7 @@ class _MontyIdeState extends State<MontyIde> {
   // Users who want the AI Pilot click the chat icon to open it.
   bool _showAssistant = false;
   bool _showExternals = false;
+  bool _showFileExplorer = true;
   bool _showUiPanel = false;
   bool _viewingAssistantBuffer = false;
 
@@ -405,23 +406,25 @@ class _MontyIdeState extends State<MontyIde> {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(
-          width: _explorerWidth,
-          child: FileExplorer(
-            key: ValueKey('explorer_$_fileExplorerVersion'),
-            vfs: widget.vfs,
-            onFileSelected: (path) => unawaited(_loadFile(path)),
+        if (_showFileExplorer) ...[
+          SizedBox(
+            width: _explorerWidth,
+            child: FileExplorer(
+              key: ValueKey('explorer_$_fileExplorerVersion'),
+              vfs: widget.vfs,
+              onFileSelected: (path) => unawaited(_loadFile(path)),
+            ),
           ),
-        ),
-        _HorizontalResizer(
-          onDrag: (delta) {
-            setState(() {
-              _explorerWidth += delta;
-              if (_explorerWidth < 100) _explorerWidth = 100;
-              if (_explorerWidth > 400) _explorerWidth = 400;
-            });
-          },
-        ),
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _explorerWidth += delta;
+                if (_explorerWidth < 100) _explorerWidth = 100;
+                if (_explorerWidth > 400) _explorerWidth = 400;
+              });
+            },
+          ),
+        ],
         Expanded(
           child: Column(
             children: [
@@ -673,6 +676,19 @@ class _MontyIdeState extends State<MontyIde> {
                 size: 20,
               ),
               tooltip: 'Save As',
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () =>
+                  setState(() => _showFileExplorer = !_showFileExplorer),
+              icon: Icon(
+                _showFileExplorer ? Icons.folder_open : Icons.folder,
+                color: _showFileExplorer ? Colors.blue : null,
+                size: 20,
+              ),
+              tooltip: _showFileExplorer
+                  ? 'Hide files'
+                  : 'Show files',
             ),
             IconButton(
               visualDensity: VisualDensity.compact,
