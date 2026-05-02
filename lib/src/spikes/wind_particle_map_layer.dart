@@ -104,16 +104,14 @@ class _WindParticleMapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Trail fade.
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = const Color(0xFF0D1117).withAlpha(30),
-    );
-
     final paint = Paint()..strokeCap = StrokeCap.round;
 
     for (final p in particles) {
       final wind = _grid.sample(p.lat, p.lng, bounds);
+
+      // Save previous position for tail line.
+      final prevLat = p.lat;
+      final prevLng = p.lng;
 
       // Advance position in degrees.
       p
@@ -131,8 +129,9 @@ class _WindParticleMapPainter extends CustomPainter {
         continue;
       }
 
-      // Project to screen.
-      final screen = camera.latLngToScreenOffset(LatLng(p.lat, p.lng));
+      // Project both ends of the tail to screen.
+      final prev = camera.latLngToScreenOffset(LatLng(prevLat, prevLng));
+      final curr = camera.latLngToScreenOffset(LatLng(p.lat, p.lng));
 
       // Color by speed: blue → cyan → green → yellow.
       final speed = wind.distance;
@@ -140,13 +139,14 @@ class _WindParticleMapPainter extends CustomPainter {
       final r = (t * 100).round();
       final g = (80 + t * 175).round().clamp(0, 255);
       final b = (255 - t * 200).round().clamp(0, 255);
-      final alpha = (60 + (p.age / p.maxAge * 160)).round().clamp(0, 220);
+      final alpha = (120 + (p.age / p.maxAge * 120)).round().clamp(0, 240);
 
       paint
         ..color = Color.fromARGB(alpha, r, g, b)
-        ..strokeWidth = 1.8;
+        ..strokeWidth = 1.5;
 
-      canvas.drawPoints(ui.PointMode.points, [screen], paint);
+      // Short line tail shows direction without accumulated canvas state.
+      canvas.drawLine(prev, curr, paint);
     }
   }
 
