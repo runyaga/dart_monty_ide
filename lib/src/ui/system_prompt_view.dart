@@ -63,7 +63,7 @@ class _SystemPromptViewState extends State<SystemPromptView> {
         title: const Text('System Prompt', style: TextStyle(fontSize: 16)),
         actions: [
           IconButton(
-            onPressed: _save,
+            onPressed: () => unawaited(_save()),
             icon: const Icon(Icons.save),
             tooltip: 'Save Prompt',
           ),

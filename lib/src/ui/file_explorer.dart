@@ -31,6 +31,11 @@ class _FileExplorerState extends State<FileExplorer> {
     unawaited(_refresh());
   }
 
+  Future<void> _deleteAndRefresh(String file) async {
+    await widget.vfs.deleteFile(file);
+    await _refresh();
+  }
+
   Future<void> _refresh() async {
     if (mounted) setState(() => _isLoading = true);
     try {
@@ -127,6 +132,7 @@ class _FileExplorerState extends State<FileExplorer> {
                 itemCount: _files.length,
                 itemBuilder: (context, index) {
                   final file = _files[index];
+
                   return ListTile(
                     leading: const Icon(Icons.description, size: 18),
                     title: Text(
@@ -140,10 +146,7 @@ class _FileExplorerState extends State<FileExplorer> {
                     },
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, size: 16),
-                      onPressed: () async {
-                        await widget.vfs.deleteFile(file);
-                        await _refresh();
-                      },
+                      onPressed: () => unawaited(_deleteAndRefresh(file)),
                     ),
                   );
                 },

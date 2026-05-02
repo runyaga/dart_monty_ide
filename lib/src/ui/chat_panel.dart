@@ -157,11 +157,13 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          color: Theme.of(context).secondaryHeaderColor,
+          color: theme.secondaryHeaderColor,
           height: 40,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -228,7 +230,7 @@ class _ChatPanelState extends State<ChatPanel> {
         ),
         if (_showSettings)
           Container(
-            color: Theme.of(context).cardColor,
+            color: theme.cardColor,
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
@@ -281,6 +283,7 @@ class _ChatPanelState extends State<ChatPanel> {
             itemBuilder: (context, index) {
               final msg = widget.messages[index];
               if (msg.role == 'tool') return const SizedBox.shrink();
+
               return _ChatMessageWidget(
                 key: ValueKey(msg),
                 message: msg,
@@ -292,12 +295,12 @@ class _ChatPanelState extends State<ChatPanel> {
           ),
         ),
         Material(
-          color: Theme.of(context).cardColor,
+          color: theme.cardColor,
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(color: Theme.of(context).dividerColor),
+                top: BorderSide(color: theme.dividerColor),
               ),
             ),
             child: Row(
@@ -351,7 +354,7 @@ class _ChatPanelState extends State<ChatPanel> {
 
   void _viewSystemPrompt(BuildContext context) {
     unawaited(
-      showDialog<void>(
+      showDialog(
         context: context,
         builder: (context) => Dialog(
           child: Container(
@@ -388,19 +391,20 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    final role = widget.message.role;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.message.role.toUpperCase(),
+            role.toUpperCase(),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 10,
-              color: widget.message.role == 'user'
-                  ? Colors.blue
-                  : Colors.purple,
+              color: role == 'user' ? Colors.blue : Colors.purple,
             ),
           ),
           const SizedBox(height: 4),
@@ -429,6 +433,7 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
     final text = element.textContent;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -526,7 +531,7 @@ class _OllamaUnreachableBanner extends StatelessWidget {
                 MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: _open,
+                    onTap: () => unawaited(_open()),
                     child: Text(
                       'Setup walkthrough →',
                       style: TextStyle(

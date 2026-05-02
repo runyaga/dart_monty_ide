@@ -57,6 +57,7 @@ class MontyPromptExtension extends MontyExtension with ChangeNotifier {
           _fragments.add(text);
           notifyListeners();
         }
+
         return null;
       },
     ),

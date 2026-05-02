@@ -19,8 +19,8 @@ String buildSystemPrompt({
 
   final extFragments = <String>[
     for (final e in exts)
-      if (e.systemPromptContext case final ctx? when ctx.trim().isNotEmpty)
-        ctx.trim(),
+      if (e.systemPromptContext?.trim() case final ctx? when ctx.isNotEmpty)
+        ctx,
   ];
   if (extFragments.isNotEmpty) {
     buf.writeln('\n\n## RUNTIME EXTENSIONS');

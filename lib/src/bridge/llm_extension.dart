@@ -58,6 +58,7 @@ class MontyLlmExtension extends MontyExtension {
         await for (final chunk in stream) {
           if (chunk.text != null) buf.write(chunk.text);
         }
+
         return buf.toString();
       },
     ),

@@ -31,12 +31,14 @@ class LocalMontyVfs implements MontyVfs {
         files.add(p.relative(entity.path, from: rootPath));
       }
     }
+
     return files;
   }
 
   @override
-  Future<String> readFile(String path) async {
+  Future<String> readFile(String path) {
     final file = _fs.file(p.join(rootPath, path));
+
     return file.readAsString();
   }
 

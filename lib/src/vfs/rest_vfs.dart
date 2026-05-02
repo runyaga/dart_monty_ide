@@ -29,7 +29,8 @@ class RestMontyVfs implements MontyVfs {
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
-      return data.cast<String>();
+
+      return data.cast();
     }
     throw Exception('Failed to list files: ${response.statusCode}');
   }

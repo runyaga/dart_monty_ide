@@ -16,6 +16,7 @@ class _StripRequestIdClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
     request.headers.remove('X-Request-ID');
+
     return _inner.send(request);
   }
 
@@ -61,6 +62,7 @@ class OllamaLlmService implements LlmService {
         toolCalls: toolCallsData?.map((dynamic tc) {
           final map = tc as Map<String, dynamic>;
           final function = map['function'] as Map<String, dynamic>;
+
           return ToolCall(
             function: ToolCallFunction(
               name: function['name'] as String? ?? '',
@@ -116,6 +118,7 @@ class OllamaLlmService implements LlmService {
           final toolCalls = chunk.message?.toolCalls?.map((tc) {
             final name = tc.function?.name ?? '';
             _log('LLM requested tool: $name');
+
             return LlmToolCall(
               id: '', // Positional, no ID support in ollama_dart
               name: name,
@@ -147,6 +150,7 @@ class OllamaLlmService implements LlmService {
 
   @override
   void dispose() {
-    // No-op.
+    // No-op: stateless service.
+    return;
   }
 }

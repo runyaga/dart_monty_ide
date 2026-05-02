@@ -21,6 +21,7 @@ class MemoryMontyVfs implements MontyVfs {
     while (p.startsWith('/')) {
       p = p.substring(1);
     }
+
     return p;
   }
 
@@ -39,6 +40,7 @@ class MemoryMontyVfs implements MontyVfs {
     if (content == null) {
       throw StateError('File not found: $path');
     }
+
     return content;
   }
 

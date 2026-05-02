@@ -136,6 +136,7 @@ class MontyIdeController extends ChangeNotifier {
           }
           _isExecuting = false;
           if (!silent) notifyListeners();
+
           return null;
         }
       } on Exception catch (e) {
@@ -144,6 +145,7 @@ class MontyIdeController extends ChangeNotifier {
         }
         _isExecuting = false;
         if (!silent) notifyListeners();
+
         return null;
       }
     }
@@ -240,17 +242,20 @@ class MontyIdeController extends ChangeNotifier {
         }
         _outputController.add('$msg\n');
       }
+
       return null;
     } on MontyScriptError catch (e) {
       if (!silent) {
         lastErrorLine = e.exception?.lineNumber;
         _outputController.add('[${e.excType ?? "ScriptError"}] ${e.message}\n');
       }
+
       return null;
     } on MontyResourceError catch (e) {
       if (!silent) {
         _outputController.add('[ResourceError] ${e.message}\n');
       }
+
       return null;
     } on Exception catch (e, stack) {
       debugPrint('Internal System Error: $e');
@@ -258,6 +263,7 @@ class MontyIdeController extends ChangeNotifier {
       if (!silent) {
         _outputController.add('[SystemException] $e\n');
       }
+
       return null;
     } finally {
       _isExecuting = false;
@@ -279,6 +285,7 @@ class MontyIdeController extends ChangeNotifier {
         lineCount++;
       }
     }
+
     return lineCount;
   }
 

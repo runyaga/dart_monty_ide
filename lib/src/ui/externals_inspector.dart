@@ -60,6 +60,7 @@ class ExternalsInspector extends StatelessWidget {
                 itemCount: extensions.length,
                 itemBuilder: (context, index) {
                   final ext = extensions[index];
+
                   return ExpansionTile(
                     initiallyExpanded: true,
                     title: Text(
@@ -74,6 +75,8 @@ class ExternalsInspector extends StatelessWidget {
                       final args = fn.schema.params
                           .map((p) => p.name)
                           .join(', ');
+                      final description = fn.schema.description;
+
                       return ListTile(
                         title: Text(
                           '${fn.schema.name}($args)',
@@ -83,9 +86,9 @@ class ExternalsInspector extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        subtitle: fn.schema.description != null
+                        subtitle: description != null
                             ? Text(
-                                fn.schema.description!,
+                                description,
                                 style: const TextStyle(fontSize: 10),
                               )
                             : null,

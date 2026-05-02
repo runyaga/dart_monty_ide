@@ -48,6 +48,7 @@ class MontyProxyWidget extends StatelessWidget {
       listenable: registry,
       builder: (context, _) {
         final props = registry.getProperties(id) ?? {};
+
         return builder(context, props);
       },
     );

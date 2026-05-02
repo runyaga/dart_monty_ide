@@ -110,6 +110,7 @@ void main() async {
       extensions: exts,
       scriptFragments: promptExt.fragments,
     );
+
     return exts;
   }
 

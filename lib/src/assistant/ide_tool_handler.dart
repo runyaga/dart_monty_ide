@@ -34,9 +34,10 @@ class IdeToolHandler implements AssistantToolHandler {
     );
     final errors = await Monty.typeCheck(code, prefixCode: prefix);
     if (errors.isEmpty) {
-      return <String, dynamic>{'ok': true, 'errors': <Object?>[]};
+      return {'ok': true, 'errors': <Object?>[]};
     }
-    return <String, dynamic>{
+
+    return {
       'ok': false,
       'errors': errors
           .map(
@@ -57,6 +58,7 @@ class IdeToolHandler implements AssistantToolHandler {
     // which tool call
     ideController.clearConsole();
     final res = await ideController.execute(code);
+
     return {
       'output': res?.printOutput,
       'error': res?.error?.message,
@@ -67,6 +69,7 @@ class IdeToolHandler implements AssistantToolHandler {
   @override
   Future<Map<String, dynamic>> writeFile(String path, String content) async {
     await vfs.writeFile(path, content);
+
     return {'status': 'success', 'path': path};
   }
 
@@ -74,6 +77,7 @@ class IdeToolHandler implements AssistantToolHandler {
   Future<Map<String, dynamic>> readFile(String path) async {
     try {
       final content = await vfs.readFile(path);
+
       return {'status': 'success', 'path': path, 'content': content};
     } on Object catch (e) {
       return {'status': 'error', 'message': e.toString()};
@@ -84,6 +88,7 @@ class IdeToolHandler implements AssistantToolHandler {
   Future<Map<String, dynamic>> listFiles() async {
     try {
       final files = await vfs.listFiles();
+
       return {'status': 'success', 'files': files};
     } on Object catch (e) {
       return {'status': 'error', 'message': e.toString()};
@@ -95,6 +100,7 @@ class IdeToolHandler implements AssistantToolHandler {
     for (final e in exts) {
       if (e is EventLoopExtension) return e;
     }
+
     return null;
   }
 
@@ -107,7 +113,8 @@ class IdeToolHandler implements AssistantToolHandler {
         'message': 'EventLoopExtension not registered',
       };
     }
-    return <String, dynamic>{
+
+    return {
       'status': 'success',
       'tree': el.lastEmitted,
       'awaiting': el.isWaiting,
@@ -123,6 +130,7 @@ class IdeToolHandler implements AssistantToolHandler {
     final el = _eventLoop;
     if (el == null) {
       debugPrint('[ui_dispatch] no EventLoopExtension registered');
+
       return {
         'status': 'error',
         'message': 'EventLoopExtension not registered',
@@ -133,11 +141,13 @@ class IdeToolHandler implements AssistantToolHandler {
     debugPrint('[ui_dispatch] dispatching $event (awaiting=${el.isWaiting})');
     try {
       el.dispatch(event);
+
       return {'status': 'success', 'event': event};
       // Why: dispatch documents `throw StateError` as its expected error.
       // ignore: avoid_catching_errors
     } on StateError catch (e) {
       debugPrint('[ui_dispatch] StateError: ${e.message}');
+
       return {'status': 'error', 'message': e.message, 'event': event};
     }
   }

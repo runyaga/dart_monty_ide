@@ -61,12 +61,12 @@ class MontyEditorState extends State<MontyEditor> {
     super.dispose();
   }
 
+  // Bumped inside setState to mark the element dirty when the gutter
+  // indicators live in the IDE controller and not on this state.
+  int _rebuildSentinel = 0;
+
   void _onIdeStateChanged() {
-    if (mounted) {
-      setState(() {
-        // Trigger rebuild to update gutter indicators
-      });
-    }
+    if (mounted) setState(() => _rebuildSentinel++);
   }
 
   /// Toggles the visibility of the search bar.
@@ -95,12 +95,12 @@ class MontyEditorState extends State<MontyEditor> {
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
-      shortcuts: const <ShortcutActivator, Intent>{
+      shortcuts: const {
         SingleActivator(LogicalKeyboardKey.keyF, meta: true): _FindIntent(),
         SingleActivator(LogicalKeyboardKey.escape): _CancelIntent(),
       },
       child: Actions(
-        actions: <Type, Action<Intent>>{
+        actions: {
           _FindIntent: CallbackAction<_FindIntent>(
             onInvoke: (_) => toggleFind(),
           ),
@@ -128,6 +128,7 @@ class MontyEditorState extends State<MontyEditor> {
                 ),
                 findBuilder: (context, controller, readOnly) {
                   if (!_showFind) return const _EmptyPreferredSize();
+
                   return _MontyFindWidget(
                     controller: controller,
                     onClose: () {

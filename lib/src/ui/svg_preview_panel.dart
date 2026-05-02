@@ -28,6 +28,8 @@ class SvgPreviewPanel extends StatelessWidget {
       builder: (context, _) {
         final svg = hostApi.latestSvg;
         if (svg == null) return const SizedBox.shrink();
+        final textTheme = Theme.of(context).textTheme;
+
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerLowest,
@@ -47,13 +49,13 @@ class SvgPreviewPanel extends StatelessWidget {
                   Text(
                     'svg_render output  '
                     '(${svg.length} bytes)',
-                    style: Theme.of(context).textTheme.labelMedium,
+                    style: textTheme.labelMedium,
                   ),
                   const Spacer(),
                   if (hostApi.latestPath != null)
                     SelectableText(
                       hostApi.latestPath!,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: textTheme.bodySmall,
                     ),
                 ],
               ),

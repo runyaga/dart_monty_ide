@@ -31,6 +31,7 @@ class MontyFlutterExtension extends MontyExtension {
         final key = args['key'] as String? ?? '';
         final value = args['value'];
         registry.setProperty(id, key, value);
+
         return null;
       },
     ),
@@ -46,6 +47,7 @@ class MontyFlutterExtension extends MontyExtension {
       handler: (args, ctx) async {
         final id = args['id'] as String? ?? '';
         final key = args['key'] as String? ?? '';
+
         return registry.getProperty(id, key);
       },
     ),
@@ -62,6 +64,7 @@ class MontyFlutterExtension extends MontyExtension {
         final id = args['id'] as String? ?? '';
         final color = args['color'] as String? ?? '';
         registry.setProperty(id, 'color', color);
+
         return null;
       },
     ),
@@ -82,6 +85,7 @@ class MontyFlutterExtension extends MontyExtension {
         final a = (aValue is num) ? aValue.toInt() : 0;
         final b = (bValue is num) ? bValue.toInt() : 0;
         if (b <= a) return a;
+
         return a + _random.nextInt(b - a + 1);
       },
     ),
@@ -98,6 +102,7 @@ class MontyFlutterExtension extends MontyExtension {
         final items = itemsValue is Iterable
             ? List<Object?>.from(itemsValue)
             : <Object?>[];
+
         return items..shuffle(_random);
       },
     ),

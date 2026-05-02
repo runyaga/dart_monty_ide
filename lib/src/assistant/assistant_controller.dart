@@ -137,6 +137,7 @@ class AssistantController {
     if (_isStopped) {
       const msg = '🛑 Assistant stopped by user.';
       _log(msg);
+
       return msg;
     }
 
@@ -144,6 +145,7 @@ class AssistantController {
     if (_turnCount >= maxTurns) {
       const msg = '⚠️ Verification turn limit reached ($maxTurns).';
       _log(msg);
+
       return msg;
     }
 
@@ -177,18 +179,21 @@ class AssistantController {
       }
     } on Object catch (e) {
       _log('LLM Stream Error: $e');
+
       return 'Error: $e';
     }
 
     if (_isStopped) {
       const msg = '🛑 Assistant stopped by user.';
       _log(msg);
+
       return msg;
     }
 
     if (toolCalls.isEmpty) {
       _history.add({'role': 'assistant', 'content': assistantText});
       _log('Assistant finished: $assistantText');
+
       return assistantText;
     }
 
@@ -222,17 +227,19 @@ class AssistantController {
       _eventController.add(ToolCallEvent(call.name, call.arguments));
       final result = await _executeTool(call);
       _eventController.add(ToolResultEvent(call.name, result));
-      _log('Tool result [${call.name}]: ${jsonEncode(result)}');
+      final encodedResult = jsonEncode(result);
+      _log('Tool result [${call.name}]: $encodedResult');
       _history.add({
         'role': 'tool',
         'tool_call_id': call.id,
-        'content': jsonEncode(result),
+        'content': encodedResult,
       });
     }
 
     if (_isStopped) {
       const msg = '🛑 Assistant stopped by user.';
       _log(msg);
+
       return msg;
     }
 
@@ -244,16 +251,20 @@ class AssistantController {
     try {
       if (call.name == 'type_check') {
         final code = (call.arguments['code'] as String?) ?? '';
+
         return await toolHandler.typeCheck(code);
       } else if (call.name == 'run_python') {
         final code = (call.arguments['code'] as String?) ?? '';
+
         return await toolHandler.runPython(code);
       } else if (call.name == 'write_file') {
         final path = (call.arguments['path'] as String?) ?? 'file.py';
         final content = (call.arguments['content'] as String?) ?? '';
+
         return await toolHandler.writeFile(path, content);
       } else if (call.name == 'read_file') {
         final path = (call.arguments['path'] as String?) ?? '';
+
         return await toolHandler.readFile(path);
       } else if (call.name == 'list_files') {
         return await toolHandler.listFiles();
@@ -262,6 +273,7 @@ class AssistantController {
       } else if (call.name == 'ui_dispatch') {
         final target = (call.arguments['target'] as String?) ?? '';
         final eventType = (call.arguments['event_type'] as String?) ?? 'click';
+
         return await toolHandler.uiDispatch(
           target: target,
           eventType: eventType,
@@ -271,6 +283,7 @@ class AssistantController {
     } on Object catch (e) {
       return {'error': e.toString()};
     }
+
     return {'error': 'Unknown tool: ${call.name}'};
   }
 

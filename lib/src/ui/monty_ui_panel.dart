@@ -211,6 +211,7 @@ class _MontyUiRenderer extends StatelessWidget {
   Widget _buildText() {
     final value = (node['value'] ?? '').toString();
     final size = (node['size'] as num?)?.toDouble();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Text(value, style: TextStyle(fontSize: size)),
@@ -220,6 +221,7 @@ class _MontyUiRenderer extends StatelessWidget {
   Widget _buildButton() {
     final label = (node['label'] ?? 'Button').toString();
     final id = node['id'];
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: ElevatedButton(
@@ -236,6 +238,7 @@ class _MontyUiRenderer extends StatelessWidget {
     final raw = (node['value'] as num?)?.toDouble() ?? min;
     final value = raw.clamp(min, max);
     final label = (node['label'] as String?) ?? '';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
@@ -263,6 +266,7 @@ class _MontyUiRenderer extends StatelessWidget {
     final id = node['id'];
     final value = node['value'] == true;
     final label = (node['label'] ?? '').toString();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -283,6 +287,7 @@ class _MontyUiRenderer extends StatelessWidget {
     final id = node['id'];
     final value = (node['value'] ?? '').toString();
     final hint = (node['hint'] ?? '').toString();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: TextField(
@@ -316,6 +321,7 @@ class _MontyUiRenderer extends StatelessWidget {
         children: children,
       );
     }
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: children,
