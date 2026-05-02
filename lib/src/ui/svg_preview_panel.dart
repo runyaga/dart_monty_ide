@@ -5,7 +5,7 @@ import 'package:jovial_svg/jovial_svg.dart';
 /// Auto-show/auto-hide preview panel for SVG documents emitted via
 /// `svg_render(...)` from a `dart_monty` script.
 ///
-/// Subscribes to [JovialSvgHostApi] (a `ChangeNotifier`) and re-renders
+/// Subscribes to [FlutterSvgHostApi] (a `ChangeNotifier`) and re-renders
 /// whenever the latest SVG changes. Renders via `jovial_svg`'s
 /// [ScalableImageWidget], which works on both Flutter native and Flutter
 /// web.
@@ -17,9 +17,9 @@ class SvgPreviewPanel extends StatelessWidget {
   /// Creates a [SvgPreviewPanel].
   const SvgPreviewPanel({required this.hostApi, super.key});
 
-  /// The host api whose [JovialSvgHostApi.latestImage] this panel
+  /// The host api whose [FlutterSvgHostApi.latestImage] this panel
   /// renders. Listened to via `AnimatedBuilder`.
-  final JovialSvgHostApi hostApi;
+  final FlutterSvgHostApi hostApi;
 
   @override
   Widget build(BuildContext context) {

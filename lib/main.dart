@@ -70,13 +70,13 @@ void main() async {
 
   late final MontyIdeController controller;
 
-  // JovialSvgHostApi is the primary SvgHostApi: parses SVG once at
+  // FlutterSvgHostApi is the primary SvgHostApi: parses SVG once at
   // render time and exposes a pre-built ScalableImage for the preview
   // panel.  ConsoleSvgHostApi is a side-effect: it writes the raw SVG
   // to a temp file and logs the path to the IDE console.  We chain
   // the two via a ChangeNotifier listener so SvgExtension only sees
   // one host API.
-  final svgHostApi = JovialSvgHostApi();
+  final svgHostApi = FlutterSvgHostApi();
   final consoleSvg = ConsoleSvgHostApi(
     (line) => controller.appendOutput(line),
   );
@@ -641,7 +641,7 @@ class MyApp extends StatelessWidget {
 
   /// The host api the SVG preview panel watches for `svg_render(...)`
   /// output.
-  final JovialSvgHostApi svgHostApi;
+  final FlutterSvgHostApi svgHostApi;
 
   /// The host api the map panel watches for `map_*` calls.
   final FlutterMapHostApi mapHostApi;
@@ -693,7 +693,7 @@ class MyHomePage extends StatelessWidget {
   final WidgetRegistry registry;
 
   /// SVG host api for the preview panel.
-  final JovialSvgHostApi svgHostApi;
+  final FlutterSvgHostApi svgHostApi;
 
   /// Map host api for the map panel.
   final FlutterMapHostApi mapHostApi;
