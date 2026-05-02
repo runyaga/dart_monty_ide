@@ -20,6 +20,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_dataframe/hhg_dataframe.dart';
 import 'package:hhg_duckdb/hhg_duckdb.dart';
+import 'package:hhg_flchart/hhg_flchart.dart';
+import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
 import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_map/hhg_map.dart';
@@ -87,6 +89,7 @@ void main() async {
     }
   });
   final mapHostApi = FlutterMapHostApi();
+  final chartHostApi = FlChartHostApiImpl();
 
   List<MontyExtension> extensionsFactory() {
     final flutterExt = MontyFlutterExtension(registry);
@@ -106,6 +109,7 @@ void main() async {
     final svgExt = SvgExtension(hostApi: svgHostApi);
     final mapExt = MapExtension(hostApi: mapHostApi);
     final geoExt = GeoEngineExtension();
+    final chartExt = FlChartExtension(hostApi: chartHostApi);
     final exts = <MontyExtension>[
       flutterExt,
       eventLoopExt,
@@ -116,6 +120,7 @@ void main() async {
       svgExt,
       mapExt,
       geoExt,
+      chartExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
       basePrompt: defaultAssistantPrompt,
@@ -583,6 +588,7 @@ print(f"Final score: {score} / {asked}")
     'examples/16_hhg_duckdb_inspector.py',
     _hhgDuckdbInspectorScript,
   );
+  await vfs.writeFile('examples/17_hhg_charts.py', _hhgChartsScript);
 
   final files = await vfs.listFiles();
   var shouldUpdate = !files.contains('system_prompt.txt');
@@ -604,6 +610,7 @@ print(f"Final score: {score} / {asked}")
       registry: registry,
       svgHostApi: svgHostApi,
       mapHostApi: mapHostApi,
+      chartHostApi: chartHostApi,
     ),
   );
 }
@@ -617,6 +624,7 @@ class MyApp extends StatelessWidget {
     required this.registry,
     required this.svgHostApi,
     required this.mapHostApi,
+    required this.chartHostApi,
     super.key,
   });
 
@@ -638,6 +646,9 @@ class MyApp extends StatelessWidget {
   /// The host api the map panel watches for `map_*` calls.
   final FlutterMapHostApi mapHostApi;
 
+  /// The host api the chart panel watches for `chart_*` calls.
+  final FlChartHostApiImpl chartHostApi;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -653,6 +664,7 @@ class MyApp extends StatelessWidget {
         registry: registry,
         svgHostApi: svgHostApi,
         mapHostApi: mapHostApi,
+        chartHostApi: chartHostApi,
       ),
     );
   }
@@ -667,6 +679,7 @@ class MyHomePage extends StatelessWidget {
     required this.registry,
     required this.svgHostApi,
     required this.mapHostApi,
+    required this.chartHostApi,
     super.key,
   });
 
@@ -685,6 +698,9 @@ class MyHomePage extends StatelessWidget {
   /// Map host api for the map panel.
   final FlutterMapHostApi mapHostApi;
 
+  /// Chart host api for the chart panel.
+  final FlChartHostApiImpl chartHostApi;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -698,6 +714,7 @@ class MyHomePage extends StatelessWidget {
         registry: registry,
         svgHostApi: svgHostApi,
         mapHostApi: mapHostApi,
+        chartHostApi: chartHostApi,
       ),
     );
   }
@@ -1351,4 +1368,73 @@ while True:
         selected = target[4:]
 
 print("DuckDB inspector closed.")
+''';
+
+const _hhgChartsScript = '''
+# HHG: interactive fl_chart demo — bar, line, pie, scatter, radar.
+# Open the Monty UI panel (toolbar "smart_display" icon) before running.
+# Each chart_* call immediately updates the panel; chart_clear resets.
+requires(["chart_bar", "chart_line", "chart_pie",
+          "chart_scatter", "chart_radar", "chart_clear"])
+
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+sales  = [42, 58, 35, 71, 89, 63]
+
+# --- Bar chart ---
+chart_bar(
+    x=months,
+    y=sales,
+    title="Monthly Sales",
+    ylabel="Units",
+    color="#4A90D9",
+)
+print("Bar chart rendered. Sleeping 3s …")
+import time; time.sleep(3)
+
+# --- Line chart (two series) ---
+target = [50, 55, 60, 65, 70, 75]
+chart_line(
+    x=months,
+    y=sales,
+    title="Sales vs Target",
+    ylabel="Units",
+    color="#E44D3A",
+    series=[{"x": months, "y": target, "label": "Target", "color": "#4CAF50"}],
+)
+print("Line chart rendered. Sleeping 3s …")
+time.sleep(3)
+
+# --- Pie chart ---
+chart_pie(
+    labels=["Widgets", "Gadgets", "Doohickeys", "Thingamajigs"],
+    values=[35, 25, 20, 20],
+    title="Product Mix",
+)
+print("Pie chart rendered. Sleeping 3s …")
+time.sleep(3)
+
+# --- Scatter plot ---
+import random
+random.seed(42)
+xs = [random.uniform(0, 10) for _ in range(40)]
+ys = [x * 1.5 + random.gauss(0, 1) for x in xs]
+chart_scatter(
+    x=xs,
+    y=ys,
+    title="Scatter: y ≈ 1.5x + noise",
+    xlabel="x",
+    ylabel="y",
+    color="#9C27B0",
+)
+print("Scatter plot rendered. Sleeping 3s …")
+time.sleep(3)
+
+# --- Radar chart ---
+chart_radar(
+    labels=["Speed", "Power", "Range", "Accuracy", "Stealth"],
+    values=[80, 65, 90, 75, 55],
+    title="Unit Stats",
+    color="#FF9800",
+)
+print("Radar chart rendered. Done.")
 ''';

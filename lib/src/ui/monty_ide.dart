@@ -16,6 +16,7 @@ import 'package:dart_monty_ide/src/ui/monty_editor.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
+import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
 import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
 import 'package:http/http.dart' as http;
@@ -30,6 +31,7 @@ class MontyIde extends StatefulWidget {
     this.registry,
     this.svgHostApi,
     this.mapHostApi,
+    this.chartHostApi,
     super.key,
   });
 
@@ -49,6 +51,10 @@ class MontyIde extends StatefulWidget {
   /// Optional map host api. When non-null, the UI panel mounts a map
   /// widget driven by `map_*` host function calls.
   final FlutterMapHostApi? mapHostApi;
+
+  /// Optional chart host api. When non-null, the UI panel mounts a chart
+  /// widget driven by `chart_*` host function calls.
+  final FlChartHostApiImpl? chartHostApi;
 
   @override
   State<MontyIde> createState() => _MontyIdeState();
@@ -137,6 +143,7 @@ class _MontyIdeState extends State<MontyIde> {
     // that matches the el_emit-driven mental model: any UI-bound
     // output pops the panel.
     widget.svgHostApi?.addListener(_onSvgRendered);
+    widget.chartHostApi?.addListener(_onChartRendered);
 
     _initAssistant();
     unawaited(_initController());
@@ -144,6 +151,13 @@ class _MontyIdeState extends State<MontyIde> {
   }
 
   void _onSvgRendered() {
+    if (!mounted) return;
+    if (!_showUiPanel) {
+      setState(() => _showUiPanel = true);
+    }
+  }
+
+  void _onChartRendered() {
     if (!mounted) return;
     if (!_showUiPanel) {
       setState(() => _showUiPanel = true);
@@ -532,6 +546,7 @@ class _MontyIdeState extends State<MontyIde> {
               onClose: () => setState(() => _showUiPanel = false),
               svgHostApi: widget.svgHostApi,
               mapHostApi: widget.mapHostApi,
+              chartHostApi: widget.chartHostApi,
             ),
           ),
         ],
@@ -778,6 +793,7 @@ class _MontyIdeState extends State<MontyIde> {
   @override
   void dispose() {
     widget.svgHostApi?.removeListener(_onSvgRendered);
+    widget.chartHostApi?.removeListener(_onChartRendered);
     _saveTimer?.cancel();
     _runBannerDelay?.cancel();
     _editorController.dispose();

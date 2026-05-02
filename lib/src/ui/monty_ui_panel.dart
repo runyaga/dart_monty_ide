@@ -1,6 +1,7 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/src/ui/svg_preview_panel.dart';
 import 'package:flutter/material.dart';
+import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
 import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
 
@@ -15,6 +16,7 @@ class MontyUiPanel extends StatefulWidget {
     required this.onClose,
     this.svgHostApi,
     this.mapHostApi,
+    this.chartHostApi,
     super.key,
   });
 
@@ -31,6 +33,10 @@ class MontyUiPanel extends StatefulWidget {
   /// Optional map host api. When non-null, the panel mounts a live
   /// flutter_map widget driven by `map_*` host function calls.
   final FlutterMapHostApi? mapHostApi;
+
+  /// Optional chart host api. When non-null, the panel mounts a live
+  /// chart widget driven by `chart_*` host function calls.
+  final FlChartHostApiImpl? chartHostApi;
 
   @override
   State<MontyUiPanel> createState() => _MontyUiPanelState();
@@ -100,6 +106,8 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
               height: 300,
               child: mapWidget(widget.mapHostApi!),
             ),
+          if (widget.chartHostApi != null)
+            FlChartPreviewWidget(hostApi: widget.chartHostApi!),
           Expanded(
             child: _tree == null
                 ? const _EmptyState()
