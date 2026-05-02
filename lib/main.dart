@@ -552,6 +552,8 @@ print(f"Final score: {score} / {asked}")
   await vfs.writeFile('examples/11_hhg_geo_mgrs.py', _hhgGeoMgrsScript);
   await vfs.writeFile('examples/12_hhg_geo_utm.py', _hhgGeoUtmScript);
   await vfs.writeFile('examples/13_hhg_geo_airports.py', _hhgGeoAirportsScript);
+  await vfs.writeFile('examples/14_hhg_map_basics.py', _hhgMapBasicsScript);
+  await vfs.writeFile('examples/15_hhg_map_aviation.py', _hhgMapAviationScript);
 
   final files = await vfs.listFiles();
   bool shouldUpdate = !files.contains('system_prompt.txt');
@@ -1058,4 +1060,108 @@ for icao, lat, lng in airports:
         print(f"{icao:<6}  {mgrs:<20}  {z['zone']}{z['hemisphere']:<8}  {z['epsg']}")
     except ValueError as e:
         print(f"{icao:<6}  ERROR: {e}")
+''';
+
+const _hhgMapBasicsScript = r'''
+# HHG: map basics — fly to, add markers, polyline, events.
+# Open the Monty UI panel (smart_display icon) before running.
+# The map auto-mounts in the panel; tap markers to see events.
+requires([
+    "map_fly_to", "map_set_basemap", "map_clear_markers",
+    "map_add_marker", "map_add_polyline",
+    "map_fit_bounds_to_markers", "map_recv",
+])
+
+map_set_basemap("cartodb_positron")
+map_clear_markers()
+
+# Fly to New York
+map_fly_to(40.7128, -74.0060, zoom=11, animated=True)
+
+# Drop a few landmarks
+jfk  = map_add_marker(40.6398, -73.7789, label="KJFK", color="blue",   icon="local_airport")
+lga  = map_add_marker(40.7773, -73.8726, label="KLGA", color="blue",   icon="local_airport")
+ewr  = map_add_marker(40.6895, -74.1745, label="KEWR", color="blue",   icon="local_airport")
+city = map_add_marker(40.7128, -74.0060, label="NYC",  color="red",    icon="place")
+
+# Connect the airports with a polyline
+map_add_polyline(
+    [[40.6398, -73.7789], [40.7773, -73.8726], [40.6895, -74.1745]],
+    color="#0066cc",
+    width=3,
+)
+
+map_fit_bounds_to_markers(padding=60)
+print("Map ready — tap a marker or wait 10 s for timeout.")
+
+evt = map_recv(timeout_ms=10000)
+if evt is None:
+    print("No event in 10 s.")
+elif evt["type"] == "marker_tapped":
+    print(f"Tapped: {evt['marker_id']}")
+else:
+    print(f"Event: {evt['type']}")
+''';
+
+const _hhgMapAviationScript = r'''
+# HHG: aviation METAR — DuckDB + map cross-pillar demo.
+#
+# Loads live METAR data for NYC-area airports from the Aviation Weather
+# Center API, color-codes each airport by flight category (VFR=green,
+# MVFR=orange, IFR/LIFR=red), then waits for a marker tap to print
+# the raw METAR observation.
+#
+# Requires: DuckDB httpfs extension + internet access.
+# Run: duck_execute("INSTALL httpfs") once if not already installed.
+# Open the Monty UI panel before running.
+requires([
+    "duck_execute", "duck_query_records",
+    "map_set_basemap", "map_fly_to", "map_clear_markers",
+    "map_add_marker", "map_fit_bounds_to_markers", "map_recv",
+])
+
+duck_execute("INSTALL httpfs; LOAD httpfs;")
+
+# Pull live METARs for major US East Coast hubs
+duck_execute("""
+CREATE OR REPLACE TABLE metars AS
+  SELECT icaoId, name,
+         CAST(lat  AS DOUBLE) AS lat,
+         CAST(lon  AS DOUBLE) AS lng,
+         fltCat, wspd, wdir, altim, temp, rawOb
+  FROM read_json_auto(
+    'https://aviationweather.gov/api/data/metar?ids=KJFK,KLGA,KEWR,KBOS,KORD,KATL,KDFW,KLAX&format=json'
+  )
+""")
+
+rows = duck_query_records("SELECT * FROM metars ORDER BY icaoId")
+print(f"Loaded {len(rows)} METARs")
+
+map_set_basemap("cartodb_positron")
+map_fly_to(39.5, -95.0, zoom=4, animated=False)
+map_clear_markers()
+
+flt_color = {"VFR": "green", "MVFR": "orange", "IFR": "red", "LIFR": "red"}
+
+for r in rows:
+    color = flt_color.get(r["fltCat"], "grey")
+    label = f"{r['icaoId']} {r['fltCat'] or '?'}"
+    map_add_marker(r["lat"], r["lng"], label=label, color=color, icon="flight")
+
+map_fit_bounds_to_markers(padding=80)
+print("Tap a marker to see its METAR. Waiting 60 s…")
+
+while True:
+    evt = map_recv(timeout_ms=60000)
+    if evt is None:
+        print("Timeout — done.")
+        break
+    if evt["type"] == "marker_tapped":
+        mid = evt["marker_id"]
+        match = next((r for r in rows if r["icaoId"] in mid), None)
+        if match:
+            print(f"\n{match['icaoId']} ({match['name']})")
+            print(f"  Flight cat: {match['fltCat']}  Wind: {match['wdir']}° @ {match['wspd']} kt")
+            print(f"  Altimeter:  {match['altim']} inHg  Temp: {match['temp']}°C")
+            print(f"  Raw METAR:  {match['rawOb']}")
 ''';
