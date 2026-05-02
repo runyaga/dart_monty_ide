@@ -70,6 +70,8 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
   void _dispatch(Map<String, Object?> event) {
     try {
       widget.eventLoop.dispatch(event);
+      // Why: dispatch documents `throw StateError` as its expected error.
+      // ignore: avoid_catching_errors
     } on StateError catch (e) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Dispatch failed: ${e.message}')),

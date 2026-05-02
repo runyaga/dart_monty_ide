@@ -74,7 +74,6 @@ class OllamaLlmService implements LlmService {
 
     final ollamaTools = tools?.map((t) {
       return ToolDefinition(
-        type: ToolType.function,
         function: ToolFunction(
           name: t.name,
           description: t.description,
@@ -99,7 +98,7 @@ class OllamaLlmService implements LlmService {
     );
 
     _log(
-        'Requesting turn with roles: ${messages.map((m) => m['role']).toList()}');
+        'Requesting turn with roles: ${messages.map((m) => m['role']).toList()}',);
 
     unawaited(() async {
       try {

@@ -74,8 +74,9 @@ class MontyEditorState extends State<MontyEditor> {
     setState(() {
       _showFind = !_showFind;
       if (_showFind) {
-        _findController.findMode();
-        _findController.focusOnFindInput();
+        _findController
+          ..findMode()
+          ..focusOnFindInput();
       } else {
         _findController.close();
       }
@@ -94,10 +95,10 @@ class MontyEditorState extends State<MontyEditor> {
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
-      shortcuts: <ShortcutActivator, Intent>{
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
-            const _FindIntent(),
-        const SingleActivator(LogicalKeyboardKey.escape): const _CancelIntent(),
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+            _FindIntent(),
+        SingleActivator(LogicalKeyboardKey.escape): _CancelIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{

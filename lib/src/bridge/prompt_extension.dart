@@ -1,4 +1,6 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
+import 'package:dart_monty_ide/dart_monty_ide.dart' show MontyIdeController;
+import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart' show MontyIdeController;
 import 'package:flutter/foundation.dart';
 
 /// A Monty extension that lets a running script append fragments to the

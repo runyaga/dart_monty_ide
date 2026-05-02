@@ -31,7 +31,7 @@ class MontyIdeController extends ChangeNotifier {
   bool _isExecuting = false;
 
   /// Returns the list of registered extensions. May change after
-  /// [clearState] when an [extensionsFactory] was supplied.
+  /// [clearState] when an `extensionsFactory` was supplied.
   List<MontyExtension>? get extensions => _extensions;
 
   /// The line number of the last error, if any.
@@ -219,7 +219,7 @@ class MontyIdeController extends ChangeNotifier {
             final startByte = int.tryParse(byteMatch.group(1)!);
             if (startByte != null) {
               lastErrorLine = _getLineFromByteOffset(
-                  '${code.trim()}\n', startByte); // Use same normalization
+                  '${code.trim()}\n', startByte,); // Use same normalization
             }
           }
         }

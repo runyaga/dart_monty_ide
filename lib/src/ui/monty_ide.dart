@@ -1,8 +1,10 @@
 import 'dart:async';
+
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/assistant.dart';
 import 'package:dart_monty_ide/src/assistant/ide_tool_handler.dart';
 import 'package:dart_monty_ide/src/assistant/system_prompt_builder.dart';
+import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/bridge/prompt_extension.dart';
 import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
@@ -12,11 +14,10 @@ import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
-import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
-import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
+import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:re_editor/re_editor.dart';
 
@@ -150,7 +151,7 @@ class _MontyIdeState extends State<MontyIde> {
           .get(Uri.parse('http://localhost:11434/api/tags'))
           .timeout(const Duration(seconds: 3));
       if (mounted) setState(() => _ollamaReachable = resp.statusCode < 500);
-    } catch (_) {
+    } on Object catch (_) {
       if (attempt < maxAttempts) {
         // 2s, 4s, 6s = ~12s grace before the banner appears.
         await Future<void>.delayed(Duration(seconds: 2 * attempt));
@@ -169,7 +170,6 @@ class _MontyIdeState extends State<MontyIde> {
       toolHandler: handler,
       llmService: OllamaLlmService(),
       config: LlmConfig(
-        provider: LlmProvider.ollama,
         baseUrl: 'http://localhost:11434',
         model: 'gpt-oss:20b',
         temperature: _assistantTemperature,
@@ -193,7 +193,7 @@ class _MontyIdeState extends State<MontyIde> {
             if (code != null) _assistantCodeController.text = code;
           }
         } else if (event is ToolResultEvent) {
-          _assistantMessages.add(ChatMessage(role: 'tool', content: event.result.toString(), isUiOnly: false));
+          _assistantMessages.add(ChatMessage(role: 'tool', content: event.result.toString()));
           if (event.name == 'write_file') _fileExplorerVersion++;
         } else if (event is AssistantLogEvent) {
           _assistantDebugLog = '${DateTime.now().toIso8601String()}: ${event.message}\n$_assistantDebugLog';
@@ -246,8 +246,9 @@ class _MontyIdeState extends State<MontyIde> {
         if (_currentFilePath != null) {
           if (mounted) setState(() => _isSaving = true);
           try {
-            await widget.vfs.writeFile(_currentFilePath!, _editorController.text);
-          } catch (e) {
+            await widget.vfs
+                .writeFile(_currentFilePath!, _editorController.text);
+          } on Object catch (e) {
             debugPrint('Auto-save error: $e');
           } finally {
             if (mounted) setState(() => _isSaving = false);
@@ -269,7 +270,7 @@ class _MontyIdeState extends State<MontyIde> {
       } else {
         debugPrint('[_initController] onboarding.txt NOT in file list');
       }
-    } catch (e, st) {
+    } on Object catch (e, st) {
       debugPrint('[_initController] ERROR: $e\n$st');
     }
   }
@@ -285,7 +286,7 @@ class _MontyIdeState extends State<MontyIde> {
         _viewingAssistantBuffer = false;
       });
       debugPrint('[_loadFile] setState done; editor.text length=${_editorController.text.length}');
-    } catch (e, st) {
+    } on Object catch (e, st) {
       debugPrint('[_loadFile] ERROR for $path: $e\n$st');
     }
   }
@@ -317,8 +318,12 @@ class _MontyIdeState extends State<MontyIde> {
     try {
       await _assistant.processPrompt(prompt, context: context);
       if (mounted) setState(() => _ollamaReachable = true);
-    } catch (e) {
-      setState(() => _assistantMessages.add(ChatMessage(role: 'assistant', content: 'Error: $e')));
+    } on Object catch (e) {
+      setState(
+        () => _assistantMessages.add(
+          ChatMessage(role: 'assistant', content: 'Error: $e'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isAssistantStreaming = false);
       // Re-probe so the banner clears (or appears) without restart.
@@ -422,7 +427,7 @@ class _MontyIdeState extends State<MontyIde> {
               onClose: () => setState(() => _showAssistant = false),
               onClearChat: () {
                 _assistant.clearHistory();
-                setState(() => _assistantMessages.clear());
+                setState(_assistantMessages.clear);
               },
             ),
           ),
@@ -548,11 +553,11 @@ class _MontyIdeState extends State<MontyIde> {
             IconButton(visualDensity: VisualDensity.compact, onPressed: () {
               final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
               unawaited(_controller.typeCheck(code));
-            }, icon: const Icon(Icons.fact_check_outlined, color: Colors.blue, size: 20), tooltip: 'Type Check'),
+            }, icon: const Icon(Icons.fact_check_outlined, color: Colors.blue, size: 20), tooltip: 'Type Check',),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () {
               final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
               unawaited(_handleSaveAs(code));
-            }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As'),
+            }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As',),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
             IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
             if (_eventLoop != null)
@@ -592,7 +597,7 @@ class _MontyIdeState extends State<MontyIde> {
       ),
     );
     if (name != null && name.isNotEmpty) {
-      final String fileName = name.endsWith('.py') ? name : '$name.py';
+      final fileName = name.endsWith('.py') ? name : '$name.py';
       setState(() => _isSaving = true);
       try {
         await widget.vfs.writeFile(fileName, code);
@@ -602,7 +607,7 @@ class _MontyIdeState extends State<MontyIde> {
           _editorController.text = code;
           _viewingAssistantBuffer = false;
         });
-      } catch (e) {
+      } on Object catch (e) {
         debugPrint('Error saving: $e');
       } finally {
         if (mounted) setState(() => _isSaving = false);
@@ -617,33 +622,14 @@ class _MontyIdeState extends State<MontyIde> {
     _runBannerDelay?.cancel();
     _editorController.dispose();
     _assistantCodeController.dispose();
-    _consoleStreamController.close();
+    unawaited(_consoleStreamController.close());
     _assistant.dispose();
     super.dispose();
   }
 }
 
-class _TabButton extends StatelessWidget {
-  const _TabButton({required this.label, required this.isActive, required this.onTap});
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isActive ? Colors.blue : Colors.transparent, width: 2))),
-        child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isActive ? Colors.blue : Colors.grey)),
-      ),
-    );
-  }
-}
-
 class _HorizontalResizer extends StatelessWidget {
-  const _HorizontalResizer({required this.onDrag, super.key});
+  const _HorizontalResizer({required this.onDrag});
   final ValueChanged<double> onDrag;
   @override
   Widget build(BuildContext context) {

@@ -5,11 +5,11 @@ import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class MockLlmService implements LlmService {
+
+  MockLlmService(this.responses);
   final List<LlmResponseChunk> responses;
   int _callCount = 0;
   List<Map<String, dynamic>>? lastMessages;
-
-  MockLlmService(this.responses);
 
   @override
   Stream<LlmResponseChunk> streamResponse({
@@ -69,7 +69,7 @@ void main() {
             id: 'call_1',
             name: 'type_check',
             arguments: {'code': 'x: int = 42'},
-          )
+          ),
         ],
       ),
       const LlmResponseChunk(
@@ -78,7 +78,7 @@ void main() {
             id: 'call_2',
             name: 'run_python',
             arguments: {'code': 'print(42)'},
-          )
+          ),
         ],
       ),
       const LlmResponseChunk(text: 'I have verified that x equals 42.'),
@@ -116,10 +116,10 @@ void main() {
             id: 'call_loop',
             name: 'type_check',
             arguments: {'code': 'x = 1'},
-          )
+          ),
         ],
       ),
-    ));
+    ),);
 
     final controller = AssistantController(
       toolHandler: MockToolHandler(),

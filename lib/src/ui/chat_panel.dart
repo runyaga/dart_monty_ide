@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
+
 import 'package:dart_monty_ide/src/assistant/assistant_controller.dart';
-import 'package:dart_monty_ide/src/assistant/default_prompt.dart';
+import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:dart_monty_ide/src/ui/system_prompt_view.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
-import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -44,7 +43,7 @@ class ChatMessage {
   }
 
   void dispose() {
-    _contentController.close();
+    unawaited(_contentController.close());
   }
 }
 
@@ -187,8 +186,6 @@ class _ChatPanelState extends State<ChatPanel> {
                     Expanded(
                       child: Slider(
                         value: widget.temperature,
-                        min: 0,
-                        max: 1,
                         divisions: 10,
                         label: widget.temperature.toStringAsFixed(1),
                         onChanged: widget.onTemperatureChanged,
@@ -278,15 +275,17 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   void _viewSystemPrompt(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        child: Container(
-          width: 600,
-          height: 600,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
-          child: SystemPromptView(vfs: widget.vfs),
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          child: Container(
+            width: 600,
+            height: 600,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+            child: SystemPromptView(vfs: widget.vfs),
+          ),
         ),
       ),
     );

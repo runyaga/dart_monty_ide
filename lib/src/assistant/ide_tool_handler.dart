@@ -34,7 +34,7 @@ class IdeToolHandler implements AssistantToolHandler {
     );
     final errors = await Monty.typeCheck(code, prefixCode: prefix);
     if (errors.isEmpty) {
-      return <String, dynamic>{'ok': true, 'errors': []};
+      return <String, dynamic>{'ok': true, 'errors': <Object?>[]};
     }
     return <String, dynamic>{
       'ok': false,
@@ -74,7 +74,7 @@ class IdeToolHandler implements AssistantToolHandler {
     try {
       final content = await vfs.readFile(path);
       return {'status': 'success', 'path': path, 'content': content};
-    } catch (e) {
+    } on Object catch (e) {
       return {'status': 'error', 'message': e.toString()};
     }
   }
@@ -84,7 +84,7 @@ class IdeToolHandler implements AssistantToolHandler {
     try {
       final files = await vfs.listFiles();
       return {'status': 'success', 'files': files};
-    } catch (e) {
+    } on Object catch (e) {
       return {'status': 'error', 'message': e.toString()};
     }
   }
@@ -127,6 +127,8 @@ class IdeToolHandler implements AssistantToolHandler {
     try {
       el.dispatch(event);
       return {'status': 'success', 'event': event};
+      // Why: dispatch documents `throw StateError` as its expected error.
+      // ignore: avoid_catching_errors
     } on StateError catch (e) {
       debugPrint('[ui_dispatch] StateError: ${e.message}');
       return {'status': 'error', 'message': e.message, 'event': event};

@@ -2,7 +2,7 @@ import 'package:dart_monty/dart_monty_bridge.dart';
 
 /// Synthesizes the AI Pilot's system prompt by layering:
 ///   1. [basePrompt] — the static rules / Monty UI Mode docs.
-///   2. `## RUNTIME EXTENSIONS` — each extension's [systemPromptContext].
+///   2. `## RUNTIME EXTENSIONS` — each extension's `systemPromptContext`.
 ///   3. `## RUNTIME API` — auto-generated host-function signatures with
 ///      descriptions, walked from each extension's `functions`.
 ///   4. `## CURRENT SCRIPT` — fragments the running script registered
@@ -19,8 +19,9 @@ String buildSystemPrompt({
 
   final extFragments = <String>[
     for (final e in exts)
-      if (e.systemPromptContext != null && e.systemPromptContext!.trim().isNotEmpty)
-        e.systemPromptContext!.trim(),
+      if (e.systemPromptContext case final ctx?
+          when ctx.trim().isNotEmpty)
+        ctx.trim(),
   ];
   if (extFragments.isNotEmpty) {
     buf.writeln('\n\n## RUNTIME EXTENSIONS');
@@ -31,15 +32,14 @@ String buildSystemPrompt({
 
   final apiDocs = buildHostApiDocs(exts);
   if (apiDocs.isNotEmpty) {
-    buf.writeln('\n## RUNTIME API (host functions)');
-    buf.write(apiDocs);
+    buf
+      ..writeln('\n## RUNTIME API (host functions)')
+      ..write(apiDocs);
   }
 
   if (scriptFragments.isNotEmpty) {
     buf.writeln('\n## CURRENT SCRIPT');
-    for (final f in scriptFragments) {
-      buf.writeln(f);
-    }
+    scriptFragments.forEach(buf.writeln);
   }
 
   return buf.toString();
@@ -60,7 +60,7 @@ String buildHostApiDocs(List<MontyExtension> extensions) {
         HostParamType.map => 'dict',
         HostParamType.any => 'object',
       };
-  const returnOverrides = <String, String>{'el_recv': 'dict'};
+  const returnOverrides = {'el_recv': 'dict'};
   final buf = StringBuffer();
   for (final ext in extensions) {
     for (final fn in ext.functions) {
@@ -77,5 +77,6 @@ String buildHostApiDocs(List<MontyExtension> extensions) {
       }
     }
   }
+
   return buf.toString();
 }

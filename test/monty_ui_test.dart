@@ -33,7 +33,7 @@ void main() {
 
   group('MontyEditor', () {
     testWidgets('triggers onRun when button pressed', (tester) async {
-      bool runPressed = false;
+      var runPressed = false;
       final controller = CodeLineEditingController();
 
       await tester.pumpWidget(

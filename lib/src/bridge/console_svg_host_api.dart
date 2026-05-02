@@ -22,7 +22,7 @@ import 'package:hhg_svg/hhg_svg.dart';
 class ConsoleSvgHostApi extends ChangeNotifier implements SvgHostApi {
   /// Creates a [ConsoleSvgHostApi].
   ///
-  /// [appendOutput] receives the per-render console line(s).
+  /// `appendOutput` receives the per-render console line(s).
   /// [outputPath] overrides the on-disk write target. Defaults to
   /// `<systemTemp>/dart_monty_ide_render.svg` on native; ignored on
   /// web.

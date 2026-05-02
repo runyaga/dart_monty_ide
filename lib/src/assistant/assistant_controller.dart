@@ -133,14 +133,14 @@ class AssistantController {
 
   Future<String> _loop() async {
     if (_isStopped) {
-      final msg = '🛑 Assistant stopped by user.';
+      const msg = '🛑 Assistant stopped by user.';
       _log(msg);
       return msg;
     }
 
     _log('--- STARTING TURN ${_turnCount + 1} / $maxTurns ---');
     if (_turnCount >= maxTurns) {
-      final msg = '⚠️ Verification turn limit reached ($maxTurns).';
+      const msg = '⚠️ Verification turn limit reached ($maxTurns).';
       _log(msg);
       return msg;
     }
@@ -159,7 +159,7 @@ class AssistantController {
       tools: _tools,
     );
 
-    String assistantText = '';
+    var assistantText = '';
     final toolCalls = <LlmToolCall>[];
 
     try {
@@ -173,13 +173,13 @@ class AssistantController {
           toolCalls.addAll(chunk.toolCalls!);
         }
       }
-    } catch (e) {
+    } on Object catch (e) {
       _log('LLM Stream Error: $e');
       return 'Error: $e';
     }
 
     if (_isStopped) {
-      final msg = '🛑 Assistant stopped by user.';
+      const msg = '🛑 Assistant stopped by user.';
       _log(msg);
       return msg;
     }
@@ -229,13 +229,13 @@ class AssistantController {
     }
 
     if (_isStopped) {
-      final msg = '🛑 Assistant stopped by user.';
+      const msg = '🛑 Assistant stopped by user.';
       _log(msg);
       return msg;
     }
 
     // Recurse for the next turn
-    return await _loop();
+    return _loop();
   }
 
   Future<Object?> _executeTool(LlmToolCall call) async {
@@ -266,7 +266,7 @@ class AssistantController {
           value: call.arguments['value'],
         );
       }
-    } catch (e) {
+    } on Object catch (e) {
       return {'error': e.toString()};
     }
     return {'error': 'Unknown tool: ${call.name}'};
@@ -274,7 +274,7 @@ class AssistantController {
 
   /// Closes the event stream.
   void dispose() {
-    _eventController.close();
+    unawaited(_eventController.close());
   }
 
   static const List<LlmTool> _tools = [
@@ -328,7 +328,7 @@ class AssistantController {
       description: 'List all files in the workspace.',
       parameters: {
         'type': 'object',
-        'properties': {},
+        'properties': <String, dynamic>{},
       },
     ),
     LlmTool(
@@ -340,13 +340,13 @@ class AssistantController {
           'their current values.',
       parameters: {
         'type': 'object',
-        'properties': {},
+        'properties': <String, dynamic>{},
       },
     ),
     LlmTool(
       name: 'ui_dispatch',
       description:
-          'Send an event into the running script\'s el_recv() queue, as if '
+          "Send an event into the running script's el_recv() queue, as if "
           'the user clicked / dragged / typed in the panel. event_type is '
           "typically 'click' (button), 'change' (slider/checkbox), 'submit' "
           "(text_field), or 'quit'. Do NOT call this if no Monty UI script "
@@ -356,7 +356,7 @@ class AssistantController {
         'properties': {
           'target': {'type': 'string'},
           'event_type': {'type': 'string'},
-          'value': {},
+          'value': <String, dynamic>{},
         },
         'required': ['target', 'event_type'],
       },

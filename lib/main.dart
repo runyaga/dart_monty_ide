@@ -59,7 +59,6 @@ void main() async {
   // than the chat panel's default — pilot_ask is mostly used for creative
   // generation (text adventures, trivia, magic 8-balls).
   final llmConfig = LlmConfig(
-    provider: LlmProvider.ollama,
     baseUrl: 'http://localhost:11434',
     model: 'gpt-oss:20b',
     temperature: 0.7,
@@ -124,7 +123,8 @@ void main() async {
 
   await seed(
     'onboarding.txt',
-    '''# Welcome to Monty IDE
+    '''
+# Welcome to Monty IDE
 
 This is a small IDE for Monty — a sandboxed Python 3 interpreter
 written in Rust and embedded in Flutter via dart_monty. Code runs in
@@ -364,7 +364,8 @@ Have fun.
   );
   await seed(
     'examples/04_llm_text_adventure.py',
-    r'''# REQUIRES OLLAMA: this script calls pilot_ask(...) for narrative.
+    r'''
+# REQUIRES OLLAMA: this script calls pilot_ask(...) for narrative.
 # Each click of "Continue" sends the running story to the LLM and
 # appends what comes back. Type a custom action to steer the plot.
 prompt_extend(
@@ -430,7 +431,8 @@ print("THE END")
   );
   await seed(
     'examples/05_llm_trivia.py',
-    r'''# REQUIRES OLLAMA: this script generates trivia via pilot_ask(...).
+    '''
+# REQUIRES OLLAMA: this script generates trivia via pilot_ask(...).
 # Click "New question" — the LLM produces Q + 4 options. Pick one;
 # the script grades it locally and rotates topics to avoid repeats.
 prompt_extend(
@@ -556,7 +558,7 @@ print(f"Final score: {score} / {asked}")
   await vfs.writeFile('examples/15_hhg_map_aviation.py', _hhgMapAviationScript);
 
   final files = await vfs.listFiles();
-  bool shouldUpdate = !files.contains('system_prompt.txt');
+  var shouldUpdate = !files.contains('system_prompt.txt');
   if (!shouldUpdate) {
     final current = await vfs.readFile('system_prompt.txt');
     if (current.trim() != defaultAssistantPrompt.trim()) {
@@ -574,7 +576,7 @@ print(f"Final score: {score} / {asked}")
     registry: registry,
     svgHostApi: svgHostApi,
     mapHostApi: mapHostApi,
-  ));
+  ),);
 }
 
 /// The main application widget.
@@ -680,7 +682,7 @@ class MyHomePage extends StatelessWidget {
 // consecutive ' characters.
 // ---------------------------------------------------------------------------
 
-const _hhgDataframeScript = r'''
+const _hhgDataframeScript = '''
 # HHG: pure dataframe round-trip — no SQL, no SVG, no LLM.
 # Builds a frame from row dicts, filters, projects, returns rows.
 requires(["df_from_records", "df_filter", "df_select", "df_to_records"])
@@ -706,7 +708,7 @@ names_and_ages = df_select(nyc, columns=["name", "age"])
 df_to_records(names_and_ages)
 ''';
 
-const _hhgDuckdbScript = r'''
+const _hhgDuckdbScript = '''
 # HHG: DuckDB SQL — basic SELECT / aggregations / row-form output.
 # (Spatial works on FFI but triggers macOS Gatekeeper for the unsigned
 # extension binary; the IDE keeps autoLoadSpatial disabled. Scripts
@@ -747,7 +749,7 @@ print("Top 3 by population: " + str(top_three))
 top_three
 ''';
 
-const _hhgDataPillarsScript = r'''
+const _hhgDataPillarsScript = '''
 # HHG: all three pillars composed — duckdb + dataframe + svg.
 # DuckDB aggregates; dataframe round-trips the columnar wire format;
 # we hand-roll a tiny SVG bar chart and svg_render it.
@@ -808,7 +810,7 @@ print("Rendered SVG via SvgExtension; check the line above for the host preview.
 {"regions": regions, "values": values}
 ''';
 
-const _hhgDuckdbSpatialScript = r'''
+const _hhgDuckdbSpatialScript = '''
 # HHG: DuckDB-spatial — relationship operations for soliplex-style
 # scripts. Spatial joins, point-in-polygon, proximity, nearest-N,
 # polygon overlap. The kind of geo work where the script returns
@@ -925,7 +927,7 @@ ORDER BY plate
 """)
 ''';
 
-const _hhgStrictScript = r'''
+const _hhgStrictScript = '''
 # HHG: strict-mode demo. Toggle the shield icon in the toolbar.
 #
 # Strict ON:  Run pre-typechecks via Monty.typeCheck against the
@@ -958,7 +960,7 @@ print("Loaded " + str(len(records)) + " records")
 df_filter(df, where="this should be a dict")
 ''';
 
-const _hhgGeoMgrsScript = r'''
+const _hhgGeoMgrsScript = '''
 # HHG: MGRS encode / decode — convert a lat/lng to a military-grid
 # reference string and back.
 #
@@ -993,7 +995,7 @@ decoded2 = geo_mgrs_decode("18t xk 03254 99489")
 print("whitespace/lower:  " + str(round(decoded2["lat"], 6)) + ", " + str(round(decoded2["lng"], 6)))
 ''';
 
-const _hhgGeoUtmScript = r'''
+const _hhgGeoUtmScript = '''
 # HHG: UTM zone discovery + forward/inverse projection.
 #
 # geo_utm_zone(lat, lng) -> {"zone", "hemisphere", "epsg"}
@@ -1032,7 +1034,7 @@ no = geo_utm_zone(60.39, 5.32)
 print("Bergen: zone " + str(no["zone"]) + no["hemisphere"] + "  EPSG:" + str(no["epsg"]))
 ''';
 
-const _hhgGeoAirportsScript = r'''
+const _hhgGeoAirportsScript = '''
 # HHG: batch airport → MGRS + UTM zone table.
 # Shows geo_mgrs_encode and geo_utm_zone used together across a
 # list of well-known ICAO airports from different hemispheres and
@@ -1062,7 +1064,7 @@ for icao, lat, lng in airports:
         print(f"{icao:<6}  ERROR: {e}")
 ''';
 
-const _hhgMapBasicsScript = r'''
+const _hhgMapBasicsScript = '''
 # HHG: map basics — fly to, add markers, polyline, events.
 # Open the Monty UI panel (smart_display icon) before running.
 # The map auto-mounts in the panel; tap markers to see events.

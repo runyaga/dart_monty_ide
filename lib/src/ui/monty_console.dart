@@ -79,7 +79,7 @@ class _MontyConsoleState extends State<MontyConsole> {
             padding: const EdgeInsets.all(8),
             child: SingleChildScrollView(
               child: SelectableText(
-                _lines.join(''),
+                _lines.join(),
                 style: const TextStyle(
                   color: Colors.greenAccent,
                   fontFamily: 'monospace',

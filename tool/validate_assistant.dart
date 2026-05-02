@@ -2,37 +2,46 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dart_monty_ide/assistant.dart';
 
+/// Headless tool handler used by the validation script.
 class HeadlessToolHandler implements AssistantToolHandler {
   @override
   Future<Map<String, dynamic>> runPython(String code) async {
-    return <String, dynamic>{
-      'output': 'Success (Mocked for Headless Validation)',
-    };
+    return {'output': 'Success (Mocked for Headless Validation)'};
   }
 
   @override
   Future<Map<String, dynamic>> typeCheck(String code) async {
-    return <String, dynamic>{'ok': true, 'errors': []};
+    return {'ok': true, 'errors': <Object?>[]};
   }
 
   @override
   Future<Map<String, dynamic>> writeFile(String path, String content) async {
-    return <String, dynamic>{'status': 'success'};
+    return {'status': 'success'};
   }
 
   @override
   Future<Map<String, dynamic>> readFile(String path) async {
-    return <String, dynamic>{'status': 'success', 'content': '# mocked file content'};
+    return {
+      'status': 'success',
+      'content': '# mocked file content',
+    };
   }
 
   @override
   Future<Map<String, dynamic>> listFiles() async {
-    return <String, dynamic>{'status': 'success', 'files': ['main.py']};
+    return {
+      'status': 'success',
+      'files': <String>['main.py'],
+    };
   }
 
   @override
   Future<Map<String, dynamic>> uiState() async {
-    return <String, dynamic>{'status': 'success', 'tree': null, 'awaiting': false};
+    return {
+      'status': 'success',
+      'tree': null,
+      'awaiting': false,
+    };
   }
 
   @override
@@ -41,14 +50,13 @@ class HeadlessToolHandler implements AssistantToolHandler {
     required String eventType,
     Object? value,
   }) async {
-    return <String, dynamic>{'status': 'success'};
+    return {'status': 'success'};
   }
 }
 
 void main() async {
   final llmService = OllamaLlmService();
   final config = LlmConfig(
-    provider: LlmProvider.ollama,
     baseUrl: 'http://localhost:11434',
     model: 'gpt-oss:20b',
   );
@@ -60,12 +68,10 @@ void main() async {
     systemPrompt: defaultAssistantPrompt,
   );
 
-  final startTime = DateTime.now();
-  final response = await controller.processPrompt('build a depth first search');
-  final duration = DateTime.now().difference(startTime);
+  await controller.processPrompt('build a depth first search');
 
-  bool hasTypeCheck = false;
-  bool hasRunPython = false;
+  var hasTypeCheck = false;
+  var hasRunPython = false;
 
   for (var i = 0; i < controller.history.length; i++) {
     final msg = controller.history[i];
