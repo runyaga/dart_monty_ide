@@ -22,11 +22,11 @@ import 'package:hhg_dataframe/hhg_dataframe.dart';
 import 'package:hhg_duckdb/hhg_duckdb.dart';
 import 'package:hhg_flchart/hhg_flchart.dart';
 import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
-import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_map/hhg_map.dart';
+import 'package:hhg_map_flutter/hhg_map_flutter.dart';
 import 'package:hhg_svg/hhg_svg.dart';
-import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
+import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() async {

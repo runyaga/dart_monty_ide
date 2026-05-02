@@ -305,24 +305,24 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
-  hhg_flutter_map:
-    dependency: "direct main"
-    description:
-      path: "../dart_monty_labs-hhg-map/packages/hhg_flutter_map"
-      relative: true
-    source: path
-    version: "0.0.1"
   hhg_geoengine:
     dependency: "direct main"
     description:
-      path: "../dart_monty_labs-hhg-geoengine/packages/hhg_geoengine"
+      path: "../dart_monty_labs/packages/hhg_geoengine"
       relative: true
     source: path
     version: "0.0.1"
   hhg_map:
     dependency: "direct main"
     description:
-      path: "../dart_monty_labs-hhg-map/packages/hhg_map"
+      path: "../dart_monty_labs/packages/hhg_map"
+      relative: true
+    source: path
+    version: "0.0.1"
+  hhg_map_flutter:
+    dependency: "direct main"
+    description:
+      path: "../dart_monty_labs/packages/hhg_map_flutter"
       relative: true
     source: path
     version: "0.0.1"
@@ -333,10 +333,10 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
-  hhg_svg_jovial:
+  hhg_svg_flutter:
     dependency: "direct main"
     description:
-      path: "../dart_monty_labs/packages/hhg_svg_jovial"
+      path: "../dart_monty_labs/packages/hhg_svg_flutter"
       relative: true
     source: path
     version: "0.0.1"

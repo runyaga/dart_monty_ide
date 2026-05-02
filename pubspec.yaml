@@ -25,20 +25,20 @@ dependencies:
     path: ../dart_monty_labs/packages/hhg_dataframe
   hhg_duckdb:
     path: ../dart_monty_labs/packages/hhg_duckdb
-  hhg_flutter_map:
-    path: ../dart_monty_labs-hhg-map/packages/hhg_flutter_map
+  hhg_map_flutter:
+    path: ../dart_monty_labs/packages/hhg_map_flutter
   hhg_flchart:
     path: ../dart_monty_labs/packages/hhg_flchart
   hhg_flchart_flutter:
     path: ../dart_monty_labs/packages/hhg_flchart_flutter
   hhg_geoengine:
-    path: ../dart_monty_labs-hhg-geoengine/packages/hhg_geoengine
+    path: ../dart_monty_labs/packages/hhg_geoengine
   hhg_map:
-    path: ../dart_monty_labs-hhg-map/packages/hhg_map
+    path: ../dart_monty_labs/packages/hhg_map
   hhg_svg:
     path: ../dart_monty_labs/packages/hhg_svg
-  hhg_svg_jovial:
-    path: ../dart_monty_labs/packages/hhg_svg_jovial
+  hhg_svg_flutter:
+    path: ../dart_monty_labs/packages/hhg_svg_flutter
   http: ^1.2.0
   jovial_svg: ^1.1.29
   markdown: ^7.3.1

@@ -539,7 +539,7 @@ This applies to:
   both, but tests on both)
 - S3 (`hhg_dataframe`)
 - S4 (`hhg_duckdb` — spatial smoke test on both, see Pillar 2 caveats)
-- S5 (`hhg_svg` + `hhg_svg_jovial`)
+- S5 (`hhg_svg` + `hhg_svg_flutter`)
 - S6 (the end-to-end demo script must run identically in `dart run`
   *and* in the IDE's Flutter web build)
 
@@ -556,7 +556,7 @@ This applies to:
 |---|---|---|---|---|
 | 1 | `hhg_dataframe` | dartframe (subset) | Single | ffi + wasm |
 | 2 | `hhg_duckdb` | dart_duckdb (+ spatial) | Single | ffi + wasm |
-| 3 | `hhg_svg` + `hhg_svg_jovial` | jovial_svg | Three-layer | ffi + wasm |
+| 3 | `hhg_svg` + `hhg_svg_flutter` | jovial_svg | Three-layer | ffi + wasm |
 
 #### Pillar 1 — `hhg_dataframe`
 
@@ -595,7 +595,7 @@ This applies to:
   Inside Flutter (the actual `dart_monty_ide` and soliplex-frontend use
   cases) this is automatic. Document, don't fix.
 
-#### Pillar 3 — `hhg_svg` + `hhg_svg_jovial`
+#### Pillar 3 — `hhg_svg` + `hhg_svg_flutter`
 
 - Namespace: `svg_`.
 - Three packages:
@@ -606,7 +606,7 @@ This applies to:
   - `hhg_svg_host_api` (abstract): `SvgHostApi.display(String svg)` and
     related. Lives inside `hhg_svg` for v1; split if a real consumer
     asks for it.
-  - `hhg_svg_jovial` (Flutter): reference renderer using
+  - `hhg_svg_flutter` (Flutter): reference renderer using
     [jovial_svg](https://pub.dev/packages/jovial_svg) (BSD-3, web +
     native, 258k weekly downloads). Wired into `dart_monty_ide` as the
     IDE's SVG renderer.
@@ -639,7 +639,7 @@ dart_monty_labs/                          (private monorepo)
 │   ├── hhg_dataframe/                    (pillar 1)
 │   ├── hhg_duckdb/                       (pillar 2)
 │   ├── hhg_svg/                          (pillar 3 — pure Dart)
-│   └── hhg_svg_jovial/                   (pillar 3 — Flutter renderer)
+│   └── hhg_svg_flutter/                   (pillar 3 — Flutter renderer)
 └── melos.yaml                            (workspace tooling)
 ```
 
@@ -855,13 +855,13 @@ A new package in `dart_monty_labs/packages/dart_monty_hhg/`. Depends on
 - Exit criteria: same SQL — including a non-trivial spatial query —
   runs identically on FFI and WASM in CI.
 
-#### S5 — `hhg_svg` + `hhg_svg_jovial`
+#### S5 — `hhg_svg` + `hhg_svg_flutter`
 
 - `hhg_svg` (pure Dart): extension + abstract `SvgHostApi`.
-- `hhg_svg_jovial` (Flutter): implements `SvgHostApi` using
+- `hhg_svg_flutter` (Flutter): implements `SvgHostApi` using
   `jovial_svg`. Adds a widget the IDE can mount in its existing Monty
   UI panel, or a new SVG panel — TBD during S5.
-- `dart_monty_ide` wires `hhg_svg_jovial` as its `SvgHostApi` impl.
+- `dart_monty_ide` wires `hhg_svg_flutter` as its `SvgHostApi` impl.
 - **Backend gating**: FFI-first; jovial_svg supports web + native
   per pub.dev. WASM port for the renderer is the validation that the
   three-layer rule holds across backends (an `SvgHostApi` impl

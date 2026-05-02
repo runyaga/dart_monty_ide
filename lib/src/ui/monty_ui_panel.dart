@@ -2,8 +2,8 @@ import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/src/ui/svg_preview_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
-import 'package:hhg_flutter_map/hhg_flutter_map.dart';
-import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
+import 'package:hhg_map_flutter/hhg_map_flutter.dart';
+import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 
 /// A panel that renders a Flutter widget tree emitted by Python via
 /// `el_emit(...)` and forwards user events back via

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
+import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 import 'package:jovial_svg/jovial_svg.dart';
 
 /// Auto-show/auto-hide preview panel for SVG documents emitted via

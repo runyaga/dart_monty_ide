@@ -17,8 +17,8 @@ import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
-import 'package:hhg_flutter_map/hhg_flutter_map.dart';
-import 'package:hhg_svg_jovial/hhg_svg_jovial.dart';
+import 'package:hhg_map_flutter/hhg_map_flutter.dart';
+import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:re_editor/re_editor.dart';
 
