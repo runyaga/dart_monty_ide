@@ -64,8 +64,7 @@ class OllamaLlmService implements LlmService {
           return ToolCall(
             function: ToolCallFunction(
               name: function['name'] as String? ?? '',
-              arguments:
-                  function['arguments'] as Map<String, dynamic>? ?? {},
+              arguments: function['arguments'] as Map<String, dynamic>? ?? {},
             ),
           );
         }).toList(),
@@ -98,17 +97,20 @@ class OllamaLlmService implements LlmService {
     );
 
     _log(
-        'Requesting turn with roles: ${messages.map((m) => m['role']).toList()}',);
+      'Requesting turn with roles: ${messages.map((m) => m['role']).toList()}',
+    );
 
     unawaited(() async {
       try {
-        final stream = client.chat.createStream(request: request).timeout(
-          const Duration(seconds: 30),
-          onTimeout: (sink) {
-            _log('TURN TIMED OUT after 30s');
-            sink.addError(Exception('LLM turn timed out'));
-          },
-        );
+        final stream = client.chat
+            .createStream(request: request)
+            .timeout(
+              const Duration(seconds: 30),
+              onTimeout: (sink) {
+                _log('TURN TIMED OUT after 30s');
+                sink.addError(Exception('LLM turn timed out'));
+              },
+            );
         await for (final chunk in stream) {
           final delta = chunk.message?.content;
           final toolCalls = chunk.message?.toolCalls?.map((tc) {

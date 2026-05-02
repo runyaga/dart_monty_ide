@@ -33,33 +33,33 @@ class MontyLlmExtension extends MontyExtension {
 
   @override
   List<HostFunction> get functions => [
-        HostFunction(
-          schema: const HostFunctionSchema(
-            name: 'pilot_ask',
-            description:
-                'Send a one-shot prompt to the AI Pilot LLM and return its '
-                'full response as a plain string. Blocks until the LLM has '
-                'finished streaming. No system prompt, no history — each '
-                'call is independent.',
-            params: [
-              HostParam(name: 'prompt', type: HostParamType.string),
-            ],
-          ),
-          handler: (args, ctx) async {
-            final prompt = (args['prompt'] as String?) ?? '';
-            if (prompt.isEmpty) return '';
-            final stream = service.streamResponse(
-              messages: [
-                <String, dynamic>{'role': 'user', 'content': prompt},
-              ],
-              config: config,
-            );
-            final buf = StringBuffer();
-            await for (final chunk in stream) {
-              if (chunk.text != null) buf.write(chunk.text);
-            }
-            return buf.toString();
-          },
-        ),
-      ];
+    HostFunction(
+      schema: const HostFunctionSchema(
+        name: 'pilot_ask',
+        description:
+            'Send a one-shot prompt to the AI Pilot LLM and return its '
+            'full response as a plain string. Blocks until the LLM has '
+            'finished streaming. No system prompt, no history — each '
+            'call is independent.',
+        params: [
+          HostParam(name: 'prompt', type: HostParamType.string),
+        ],
+      ),
+      handler: (args, ctx) async {
+        final prompt = (args['prompt'] as String?) ?? '';
+        if (prompt.isEmpty) return '';
+        final stream = service.streamResponse(
+          messages: [
+            <String, dynamic>{'role': 'user', 'content': prompt},
+          ],
+          config: config,
+        );
+        final buf = StringBuffer();
+        await for (final chunk in stream) {
+          if (chunk.text != null) buf.write(chunk.text);
+        }
+        return buf.toString();
+      },
+    ),
+  ];
 }

@@ -19,8 +19,7 @@ String buildSystemPrompt({
 
   final extFragments = <String>[
     for (final e in exts)
-      if (e.systemPromptContext case final ctx?
-          when ctx.trim().isNotEmpty)
+      if (e.systemPromptContext case final ctx? when ctx.trim().isNotEmpty)
         ctx.trim(),
   ];
   if (extFragments.isNotEmpty) {
@@ -52,14 +51,14 @@ String buildSystemPrompt({
 String buildHostApiDocs(List<MontyExtension> extensions) {
   if (extensions.isEmpty) return '';
   String pyParamType(HostParamType t) => switch (t) {
-        HostParamType.string => 'str',
-        HostParamType.integer => 'int',
-        HostParamType.number => 'float',
-        HostParamType.boolean => 'bool',
-        HostParamType.list => 'list',
-        HostParamType.map => 'dict',
-        HostParamType.any => 'object',
-      };
+    HostParamType.string => 'str',
+    HostParamType.integer => 'int',
+    HostParamType.number => 'float',
+    HostParamType.boolean => 'bool',
+    HostParamType.list => 'list',
+    HostParamType.map => 'dict',
+    HostParamType.any => 'object',
+  };
   const returnOverrides = {'el_recv': 'dict'};
   final buf = StringBuffer();
   for (final ext in extensions) {

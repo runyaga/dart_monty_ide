@@ -122,7 +122,10 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
         children: [
           const Icon(Icons.smart_display, size: 16),
           const SizedBox(width: 6),
-          const Text('Monty UI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          const Text(
+            'Monty UI',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          ),
           const Spacer(),
           IconButton(
             visualDensity: VisualDensity.compact,
@@ -155,7 +158,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             const Icon(Icons.bolt, size: 32, color: Colors.grey),
             const SizedBox(height: 8),
-            const Text('No UI emitted yet.', style: TextStyle(color: Colors.grey)),
+            const Text(
+              'No UI emitted yet.',
+              style: TextStyle(color: Colors.grey),
+            ),
             const SizedBox(height: 4),
             Text(
               'Run a script that calls el_emit(...) to render here.',
@@ -236,12 +242,17 @@ class _MontyUiRenderer extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (label.isNotEmpty) Text('$label: ${value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
+          if (label.isNotEmpty)
+            Text(
+              '$label: ${value.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 12),
+            ),
           Slider(
             min: min,
             max: max,
             value: value,
-            onChanged: (v) => dispatch({'type': 'change', 'target': id, 'value': v}),
+            onChanged: (v) =>
+                dispatch({'type': 'change', 'target': id, 'value': v}),
           ),
         ],
       ),
@@ -259,7 +270,8 @@ class _MontyUiRenderer extends StatelessWidget {
         children: [
           Checkbox(
             value: value,
-            onChanged: (v) => dispatch({'type': 'change', 'target': id, 'value': v}),
+            onChanged: (v) =>
+                dispatch({'type': 'change', 'target': id, 'value': v}),
           ),
           if (label.isNotEmpty) Text(label),
         ],
@@ -275,8 +287,13 @@ class _MontyUiRenderer extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: TextField(
         controller: TextEditingController(text: value),
-        decoration: InputDecoration(hintText: hint, isDense: true, border: const OutlineInputBorder()),
-        onSubmitted: (v) => dispatch({'type': 'submit', 'target': id, 'value': v}),
+        decoration: InputDecoration(
+          hintText: hint,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (v) =>
+            dispatch({'type': 'submit', 'target': id, 'value': v}),
       ),
     );
   }
@@ -310,7 +327,11 @@ class _MontyUiRenderer extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Text(
         '? unknown widget: $type',
-        style: const TextStyle(color: Colors.red, fontStyle: FontStyle.italic, fontSize: 11),
+        style: const TextStyle(
+          color: Colors.red,
+          fontStyle: FontStyle.italic,
+          fontSize: 11,
+        ),
       ),
     );
   }

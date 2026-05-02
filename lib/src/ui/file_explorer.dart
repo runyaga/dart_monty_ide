@@ -89,8 +89,9 @@ class _FileExplorerState extends State<FileExplorer> {
       width: 250,
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        border:
-            Border(right: BorderSide(color: Theme.of(context).dividerColor)),
+        border: Border(
+          right: BorderSide(color: Theme.of(context).dividerColor),
+        ),
       ),
       child: Column(
         children: [

@@ -75,8 +75,11 @@ class _MontyIdeState extends State<MontyIde> {
     }
     return null;
   }
-  final CodeLineEditingController _editorController = CodeLineEditingController();
-  final CodeLineEditingController _assistantCodeController = CodeLineEditingController();
+
+  final CodeLineEditingController _editorController =
+      CodeLineEditingController();
+  final CodeLineEditingController _assistantCodeController =
+      CodeLineEditingController();
   final GlobalKey<MontyEditorState> _editorKey = GlobalKey<MontyEditorState>();
 
   String? _currentFilePath;
@@ -95,7 +98,8 @@ class _MontyIdeState extends State<MontyIde> {
   double _uiPanelWidth = 320;
 
   int _fileExplorerVersion = 0;
-  final StreamController<String> _consoleStreamController = StreamController<String>.broadcast();
+  final StreamController<String> _consoleStreamController =
+      StreamController<String>.broadcast();
 
   // Assistant Background State
   late final AssistantController _assistant;
@@ -186,22 +190,38 @@ class _MontyIdeState extends State<MontyIde> {
       if (!mounted) return;
       setState(() {
         if (event is AssistantTextEvent) {
-          if (_assistantMessages.isEmpty || _assistantMessages.last.role != 'assistant' || _assistantMessages.last.isUiOnly) {
-            _assistantMessages.add(ChatMessage(role: 'assistant', content: event.text));
+          if (_assistantMessages.isEmpty ||
+              _assistantMessages.last.role != 'assistant' ||
+              _assistantMessages.last.isUiOnly) {
+            _assistantMessages.add(
+              ChatMessage(role: 'assistant', content: event.text),
+            );
           } else {
             _assistantMessages.last.append(event.text);
           }
         } else if (event is ToolCallEvent) {
-          _assistantMessages.add(ChatMessage(role: 'assistant', content: '🛠️ Calling tool: ${event.name}...', isUiOnly: true));
+          _assistantMessages.add(
+            ChatMessage(
+              role: 'assistant',
+              content: '🛠️ Calling tool: ${event.name}...',
+              isUiOnly: true,
+            ),
+          );
           if (event.name == 'run_python' || event.name == 'write_file') {
-            final code = (event.arguments['code'] ?? event.arguments['content']) as String?;
+            final code =
+                (event.arguments['code'] ?? event.arguments['content'])
+                    as String?;
             if (code != null) _assistantCodeController.text = code;
           }
         } else if (event is ToolResultEvent) {
-          _assistantMessages.add(ChatMessage(role: 'tool', content: event.result.toString()));
+          _assistantMessages.add(
+            ChatMessage(role: 'tool', content: event.result.toString()),
+          );
           if (event.name == 'write_file') _fileExplorerVersion++;
         } else if (event is AssistantLogEvent) {
-          _assistantDebugLog = '${DateTime.now().toIso8601String()}: ${event.message}\n$_assistantDebugLog';
+          _assistantDebugLog =
+              '${DateTime.now().toIso8601String()}: ${event.message}\n'
+              '$_assistantDebugLog';
         }
       });
     });
@@ -211,13 +231,20 @@ class _MontyIdeState extends State<MontyIde> {
     final line = _controller.lastErrorLine;
     if (line != null) {
       final lineIndex = line - 1;
-      final content = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+      final content = _viewingAssistantBuffer
+          ? _assistantCodeController.text
+          : _editorController.text;
       final lines = content.split('\n');
       if (lineIndex >= 0 && lineIndex < lines.length) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final targetController = _viewingAssistantBuffer ? _assistantCodeController : _editorController;
-          targetController.selection = CodeLineSelection(
-            baseIndex: lineIndex, baseOffset: 0, extentIndex: lineIndex, extentOffset: lines[lineIndex].length,
+          (_viewingAssistantBuffer
+                  ? _assistantCodeController
+                  : _editorController)
+              .selection = CodeLineSelection(
+            baseIndex: lineIndex,
+            baseOffset: 0,
+            extentIndex: lineIndex,
+            extentOffset: lines[lineIndex].length,
           );
         });
       }
@@ -251,8 +278,10 @@ class _MontyIdeState extends State<MontyIde> {
         if (_currentFilePath != null) {
           if (mounted) setState(() => _isSaving = true);
           try {
-            await widget.vfs
-                .writeFile(_currentFilePath!, _editorController.text);
+            await widget.vfs.writeFile(
+              _currentFilePath!,
+              _editorController.text,
+            );
           } on Object catch (e) {
             debugPrint('Auto-save error: $e');
           } finally {
@@ -290,7 +319,10 @@ class _MontyIdeState extends State<MontyIde> {
         _editorController.text = content;
         _viewingAssistantBuffer = false;
       });
-      debugPrint('[_loadFile] setState done; editor.text length=${_editorController.text.length}');
+      debugPrint(
+        '[_loadFile] setState done; '
+        'editor.text length=${_editorController.text.length}',
+      );
     } on Object catch (e, st) {
       debugPrint('[_loadFile] ERROR for $path: $e\n$st');
     }
@@ -302,8 +334,11 @@ class _MontyIdeState extends State<MontyIde> {
   bool _strictMode = false;
 
   void _handleRun() {
-    final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-    // Each Run is a fresh take — drop any prompt fragments the prior script registered.
+    final code = _viewingAssistantBuffer
+        ? _assistantCodeController.text
+        : _editorController.text;
+    // Each Run is a fresh take — drop any prompt fragments the prior
+    // script registered.
     _promptExtension?.clear();
     unawaited(_controller.execute(code, strict: _strictMode));
   }
@@ -311,9 +346,12 @@ class _MontyIdeState extends State<MontyIde> {
   Future<void> _handleAssistantSendMessage(String prompt) async {
     if (_isAssistantStreaming) return;
 
-    final currentCode = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
+    final currentCode = _viewingAssistantBuffer
+        ? _assistantCodeController.text
+        : _editorController.text;
     final bufferName = _viewingAssistantBuffer ? 'AI Pilot' : 'Editor';
-    final context = 'Current Buffer ($bufferName):\n```python\n$currentCode\n```';
+    final context =
+        'Current Buffer ($bufferName):\n```python\n$currentCode\n```';
 
     setState(() {
       _assistantMessages.add(ChatMessage(role: 'user', content: prompt));
@@ -344,10 +382,10 @@ class _MontyIdeState extends State<MontyIde> {
   /// Composes the AI Pilot system prompt for the next turn.
   /// See [buildSystemPrompt] for the layering rules.
   String _buildSystemPrompt() => buildSystemPrompt(
-        basePrompt: defaultAssistantPrompt,
-        extensions: _controller.extensions,
-        scriptFragments: _promptExtension?.fragments ?? const [],
-      );
+    basePrompt: defaultAssistantPrompt,
+    extensions: _controller.extensions,
+    scriptFragments: _promptExtension?.fragments ?? const [],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -383,7 +421,8 @@ class _MontyIdeState extends State<MontyIde> {
                         isProcessing: _isAssistantStreaming,
                         onPrompt: _handleAssistantSendMessage,
                         onRun: (code) => unawaited(_controller.execute(code)),
-                        onTypeCheck: (code) => unawaited(_controller.typeCheck(code)),
+                        onTypeCheck: (code) =>
+                            unawaited(_controller.typeCheck(code)),
                         onSaveAs: (code) => unawaited(_handleSaveAs(code)),
                       )
                     : MontyEditor(
@@ -396,7 +435,9 @@ class _MontyIdeState extends State<MontyIde> {
               ),
               const Divider(height: 1),
               Expanded(
-                child: MontyConsole(outputStream: _consoleStreamController.stream),
+                child: MontyConsole(
+                  outputStream: _consoleStreamController.stream,
+                ),
               ),
             ],
           ),
@@ -423,7 +464,8 @@ class _MontyIdeState extends State<MontyIde> {
               onStop: _handleAssistantStop,
               ollamaReachable: _ollamaReachable,
               temperature: _assistantTemperature,
-              onTemperatureChanged: (v) => setState(() => _assistantTemperature = v),
+              onTemperatureChanged: (v) =>
+                  setState(() => _assistantTemperature = v),
               debugLog: _assistantDebugLog,
               onCopyToEditor: (code) {
                 _editorController.text = code;
@@ -519,7 +561,10 @@ class _MontyIdeState extends State<MontyIde> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red.shade700,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
@@ -538,11 +583,38 @@ class _MontyIdeState extends State<MontyIde> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = false), icon: Icon(Icons.edit_note, color: !_viewingAssistantBuffer ? Colors.blue : Colors.grey), tooltip: 'Editor'),
-            IconButton(onPressed: () => setState(() => _viewingAssistantBuffer = true), icon: Icon(Icons.bolt, color: _viewingAssistantBuffer ? Colors.purple : Colors.grey), tooltip: 'AI Pilot'),
+            IconButton(
+              onPressed: () => setState(() => _viewingAssistantBuffer = false),
+              icon: Icon(
+                Icons.edit_note,
+                color: !_viewingAssistantBuffer ? Colors.blue : Colors.grey,
+              ),
+              tooltip: 'Editor',
+            ),
+            IconButton(
+              onPressed: () => setState(() => _viewingAssistantBuffer = true),
+              icon: Icon(
+                Icons.bolt,
+                color: _viewingAssistantBuffer ? Colors.purple : Colors.grey,
+              ),
+              tooltip: 'AI Pilot',
+            ),
             const SizedBox(width: 8),
-            if (_isSaving) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
-            IconButton(visualDensity: VisualDensity.compact, onPressed: _handleRun, icon: const Icon(Icons.play_arrow, color: Colors.green, size: 20), tooltip: 'Run'),
+            if (_isSaving)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: _handleRun,
+              icon: const Icon(Icons.play_arrow, color: Colors.green, size: 20),
+              tooltip: 'Run',
+            ),
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: () => setState(() => _strictMode = !_strictMode),
@@ -555,22 +627,60 @@ class _MontyIdeState extends State<MontyIde> {
                   ? 'Strict mode ON — Run will type-check first'
                   : 'Strict mode OFF — Run executes without typechecking',
             ),
-            IconButton(visualDensity: VisualDensity.compact, onPressed: () {
-              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-              unawaited(_controller.typeCheck(code));
-            }, icon: const Icon(Icons.fact_check_outlined, color: Colors.blue, size: 20), tooltip: 'Type Check',),
-            IconButton(visualDensity: VisualDensity.compact, onPressed: () {
-              final code = _viewingAssistantBuffer ? _assistantCodeController.text : _editorController.text;
-              unawaited(_handleSaveAs(code));
-            }, icon: const Icon(Icons.save_alt, color: Colors.blueGrey, size: 20), tooltip: 'Save As',),
-            IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showAssistant = !_showAssistant), icon: const Icon(Icons.chat, size: 20), tooltip: 'Assistant'),
-            IconButton(visualDensity: VisualDensity.compact, onPressed: () => setState(() => _showExternals = !_showExternals), icon: Icon(_showExternals ? Icons.info : Icons.info_outline, color: _showExternals ? Colors.blue : null, size: 20), tooltip: 'Externals'),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                final code = _viewingAssistantBuffer
+                    ? _assistantCodeController.text
+                    : _editorController.text;
+                unawaited(_controller.typeCheck(code));
+              },
+              icon: const Icon(
+                Icons.fact_check_outlined,
+                color: Colors.blue,
+                size: 20,
+              ),
+              tooltip: 'Type Check',
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                final code = _viewingAssistantBuffer
+                    ? _assistantCodeController.text
+                    : _editorController.text;
+                unawaited(_handleSaveAs(code));
+              },
+              icon: const Icon(
+                Icons.save_alt,
+                color: Colors.blueGrey,
+                size: 20,
+              ),
+              tooltip: 'Save As',
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _showAssistant = !_showAssistant),
+              icon: const Icon(Icons.chat, size: 20),
+              tooltip: 'Assistant',
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _showExternals = !_showExternals),
+              icon: Icon(
+                _showExternals ? Icons.info : Icons.info_outline,
+                color: _showExternals ? Colors.blue : null,
+                size: 20,
+              ),
+              tooltip: 'Externals',
+            ),
             if (_eventLoop != null)
               IconButton(
                 visualDensity: VisualDensity.compact,
                 onPressed: () => setState(() => _showUiPanel = !_showUiPanel),
                 icon: Icon(
-                  _showUiPanel ? Icons.smart_display : Icons.smart_display_outlined,
+                  _showUiPanel
+                      ? Icons.smart_display
+                      : Icons.smart_display_outlined,
                   color: _showUiPanel ? Colors.purple : null,
                   size: 20,
                 ),
@@ -580,7 +690,9 @@ class _MontyIdeState extends State<MontyIde> {
               visualDensity: VisualDensity.compact,
               onPressed: _controller.clearState,
               icon: const Icon(Icons.restart_alt, color: Colors.red, size: 20),
-              tooltip: 'Reset Interpreter (cancels running scripts, clears UI + console)',
+              tooltip:
+                  'Reset Interpreter '
+                  '(cancels running scripts, clears UI + console)',
             ),
           ],
         ),
@@ -594,10 +706,20 @@ class _MontyIdeState extends State<MontyIde> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Save As Python File'),
-        content: TextField(controller: nameController, decoration: const InputDecoration(hintText: 'filename.py'), autofocus: true),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: 'filename.py'),
+          autofocus: true,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, nameController.text), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, nameController.text),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -641,7 +763,13 @@ class _HorizontalResizer extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
-      child: MouseRegion(cursor: SystemMouseCursors.resizeLeftRight, child: Container(width: 4, color: Theme.of(context).dividerColor.withAlpha(25))),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        child: Container(
+          width: 4,
+          color: Theme.of(context).dividerColor.withAlpha(25),
+        ),
+      ),
     );
   }
 }

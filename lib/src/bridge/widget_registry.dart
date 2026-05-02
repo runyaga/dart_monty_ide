@@ -40,7 +40,7 @@ class MontyProxyWidget extends StatelessWidget {
 
   /// Builder that receives the current properties for this ID.
   final Widget Function(BuildContext context, Map<String, dynamic> props)
-      builder;
+  builder;
 
   @override
   Widget build(BuildContext context) {

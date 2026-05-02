@@ -21,8 +21,8 @@ class MontyIdeController extends ChangeNotifier {
   MontyIdeController({
     List<MontyExtension>? extensions,
     List<MontyExtension> Function()? extensionsFactory,
-  })  : _extensionsFactory = extensionsFactory,
-        _extensions = extensionsFactory?.call() ?? extensions;
+  }) : _extensionsFactory = extensionsFactory,
+       _extensions = extensionsFactory?.call() ?? extensions;
 
   List<MontyExtension>? _extensions;
   final List<MontyExtension> Function()? _extensionsFactory;
@@ -85,7 +85,8 @@ class MontyIdeController extends ChangeNotifier {
   /// Executes the given Python [code].
   ///
   /// Returns the [MontyResult] of the execution.
-  /// Results and print outputs are also emitted to the [output] stream unless [silent] is true.
+  /// Results and print outputs are also emitted to the [output] stream
+  /// unless [silent] is true.
   ///
   /// When [strict] is `true`, runs `Monty.typeCheck` against the
   /// auto-generated host-function stubs **before** execution; if it
@@ -156,7 +157,9 @@ class MontyIdeController extends ChangeNotifier {
       // Wait for the result
       final result = await handle.result;
 
-      if (!silent && result.printOutput != null && result.printOutput!.isNotEmpty) {
+      if (!silent &&
+          result.printOutput != null &&
+          result.printOutput!.isNotEmpty) {
         _outputController.add(result.printOutput!);
       }
 
@@ -166,8 +169,9 @@ class MontyIdeController extends ChangeNotifier {
 
         // Fallback: Parse line number from message text like "at line 3"
         if (!silent && lastErrorLine == null && montyExc != null) {
-          final lineMatch =
-              RegExp(r'at line (\d+)').firstMatch(montyExc.message);
+          final lineMatch = RegExp(
+            r'at line (\d+)',
+          ).firstMatch(montyExc.message);
           if (lineMatch != null) {
             lastErrorLine = int.tryParse(lineMatch.group(1)!);
           }
@@ -175,8 +179,9 @@ class MontyIdeController extends ChangeNotifier {
 
         // Fallback: Translate byte range
         if (!silent && lastErrorLine == null && montyExc != null) {
-          final byteMatch =
-              RegExp(r'at byte range (\d+)').firstMatch(montyExc.message);
+          final byteMatch = RegExp(
+            r'at byte range (\d+)',
+          ).firstMatch(montyExc.message);
           if (byteMatch != null) {
             final startByte = int.tryParse(byteMatch.group(1)!);
             if (startByte != null) {
@@ -195,8 +200,9 @@ class MontyIdeController extends ChangeNotifier {
             }
             errorMessage += '\n';
 
-            if (montyExc.message
-                    .contains('Simple statements must be separated') &&
+            if (montyExc.message.contains(
+                  'Simple statements must be separated',
+                ) &&
                 code.contains('print ')) {
               errorMessage +=
                   'Hint: In Monty/Python 3, print is a function. Use print(...).\n';
@@ -214,12 +220,16 @@ class MontyIdeController extends ChangeNotifier {
         lastErrorLine = e.exception?.lineNumber;
         // Also try to translate byte range from message for SyntaxError
         if (lastErrorLine == null) {
-          final byteMatch = RegExp(r'at byte range (\d+)').firstMatch(e.message);
+          final byteMatch = RegExp(
+            r'at byte range (\d+)',
+          ).firstMatch(e.message);
           if (byteMatch != null) {
             final startByte = int.tryParse(byteMatch.group(1)!);
             if (startByte != null) {
               lastErrorLine = _getLineFromByteOffset(
-                  '${code.trim()}\n', startByte,); // Use same normalization
+                '${code.trim()}\n',
+                startByte,
+              ); // Use same normalization
             }
           }
         }

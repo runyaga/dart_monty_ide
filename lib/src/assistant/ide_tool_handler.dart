@@ -53,7 +53,8 @@ class IdeToolHandler implements AssistantToolHandler {
 
   @override
   Future<Map<String, dynamic>> runPython(String code) async {
-    // Clear and delimit in console so user knows which output is from which tool call
+    // Clear and delimit in console so user knows which output is from
+    // which tool call
     ideController.clearConsole();
     final res = await ideController.execute(code);
     return {
@@ -101,7 +102,10 @@ class IdeToolHandler implements AssistantToolHandler {
   Future<Map<String, dynamic>> uiState() async {
     final el = _eventLoop;
     if (el == null) {
-      return {'status': 'error', 'message': 'EventLoopExtension not registered'};
+      return {
+        'status': 'error',
+        'message': 'EventLoopExtension not registered',
+      };
     }
     return <String, dynamic>{
       'status': 'success',
@@ -119,7 +123,10 @@ class IdeToolHandler implements AssistantToolHandler {
     final el = _eventLoop;
     if (el == null) {
       debugPrint('[ui_dispatch] no EventLoopExtension registered');
-      return {'status': 'error', 'message': 'EventLoopExtension not registered'};
+      return {
+        'status': 'error',
+        'message': 'EventLoopExtension not registered',
+      };
     }
     final event = <String, Object?>{'type': eventType, 'target': target};
     if (value != null) event['value'] = value;

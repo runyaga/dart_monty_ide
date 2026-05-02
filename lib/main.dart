@@ -34,7 +34,8 @@ void main() async {
   // plugin layer in play this typically just works, but DUCKDB_LIBPATH
   // wins if set, and a known probe path is the fallback.
   if (!kIsWeb && Platform.isMacOS) {
-    final lib = Platform.environment['DUCKDB_LIBPATH'] ??
+    final lib =
+        Platform.environment['DUCKDB_LIBPATH'] ??
         '/tmp/duckdb-spatial-probe/duckdb_lib/libduckdb.dylib';
     if (File(lib).existsSync()) {
       open.overrideFor(OperatingSystem.macOS, lib);
@@ -105,10 +106,10 @@ void main() async {
       geoExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
-          basePrompt: defaultAssistantPrompt,
-          extensions: exts,
-          scriptFragments: promptExt.fragments,
-        );
+      basePrompt: defaultAssistantPrompt,
+      extensions: exts,
+      scriptFragments: promptExt.fragments,
+    );
     return exts;
   }
 
@@ -211,7 +212,10 @@ Have fun.
   );
   await seed(
     'hello.py',
-    'def hi(name: str) -> str:\n    return f"hello {name}"\n\nprint(hi("Monty"))\n',
+    'def hi(name: str) -> str:\n'
+        '    return f"hello {name}"\n'
+        '\n'
+        'print(hi("Monty"))\n',
   );
   await seed(
     'examples/01_python_tour.py',
@@ -254,14 +258,16 @@ Have fun.
         '    el_emit({\n'
         '        "type": "column",\n'
         '        "children": [\n'
-        '            {"type": "text", "value": "Monty UI Counter", "size": 18},\n'
+        '            {"type": "text", "value": "Monty UI Counter",'
+        ' "size": 18},\n'
         '            {"type": "text", "value": f"Count: {count}"},\n'
         '            {"type": "row", "children": [\n'
         '                {"type": "button", "id": "inc", "label": "+1"},\n'
         '                {"type": "button", "id": "dec", "label": "-1"},\n'
         '                {"type": "button", "id": "reset", "label": "Reset"},\n'
         '            ]},\n'
-        '            {"type": "slider", "id": "speed", "label": "Set", "min": 0, "max": 100, "value": count},\n'
+        '            {"type": "slider", "id": "speed", "label": "Set",'
+        ' "min": 0, "max": 100, "value": count},\n'
         '        ],\n'
         '    })\n'
         '    evt = el_recv()\n'
@@ -282,10 +288,14 @@ Have fun.
   await seed(
     'examples/03_gui_thermostat.py',
     'prompt_extend(\n'
-        '    "Thermostat: target temperature slider in Celsius (range 0..50), "\n'
-        '    "Heat / Cool / Off mode buttons, fan-speed slider (1..5), and a "\n'
-        '    "Step button that advances the simulated room temperature toward "\n'
-        '    "the target. If the user gives a Fahrenheit value (e.g. 103 °F), "\n'
+        '    "Thermostat: target temperature slider in Celsius'
+        ' (range 0..50), "\n'
+        '    "Heat / Cool / Off mode buttons, fan-speed slider (1..5),'
+        ' and a "\n'
+        '    "Step button that advances the simulated room temperature'
+        ' toward "\n'
+        '    "the target. If the user gives a Fahrenheit value'
+        ' (e.g. 103 °F), "\n'
         '    "convert: C = (F - 32) * 5 / 9 and clamp to 0..50."\n'
         ')\n'
         '\n'
@@ -570,13 +580,15 @@ print(f"Final score: {score} / {asked}")
     await vfs.writeFile('system_prompt.txt', defaultAssistantPrompt);
   }
 
-  runApp(MyApp(
-    vfs: vfs,
-    controller: controller,
-    registry: registry,
-    svgHostApi: svgHostApi,
-    mapHostApi: mapHostApi,
-  ),);
+  runApp(
+    MyApp(
+      vfs: vfs,
+      controller: controller,
+      registry: registry,
+      svgHostApi: svgHostApi,
+      mapHostApi: mapHostApi,
+    ),
+  );
 }
 
 /// The main application widget.

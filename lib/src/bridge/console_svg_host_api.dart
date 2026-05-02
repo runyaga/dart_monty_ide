@@ -27,7 +27,7 @@ class ConsoleSvgHostApi extends ChangeNotifier implements SvgHostApi {
   /// `<systemTemp>/dart_monty_ide_render.svg` on native; ignored on
   /// web.
   ConsoleSvgHostApi(this._appendOutput, {String? outputPath})
-      : _outputPath = outputPath;
+    : _outputPath = outputPath;
 
   final void Function(String line) _appendOutput;
   final String? _outputPath;

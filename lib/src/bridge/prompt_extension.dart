@@ -1,6 +1,7 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/dart_monty_ide.dart' show MontyIdeController;
-import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart' show MontyIdeController;
+import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart'
+    show MontyIdeController;
 import 'package:flutter/foundation.dart';
 
 /// A Monty extension that lets a running script append fragments to the
@@ -39,36 +40,36 @@ class MontyPromptExtension extends MontyExtension with ChangeNotifier {
 
   @override
   List<HostFunction> get functions => [
-        HostFunction(
-          schema: const HostFunctionSchema(
-            name: 'prompt_extend',
-            description:
-                'Register a fragment that will be injected into the AI '
-                "Pilot's system prompt for the current script. Call near the "
-                'top of the script to declare its purpose / inputs / scope.',
-            params: [
-              HostParam(name: 'text', type: HostParamType.string),
-            ],
-          ),
-          handler: (args, ctx) async {
-            final text = (args['text'] as String?)?.trim() ?? '';
-            if (text.isNotEmpty) {
-              _fragments.add(text);
-              notifyListeners();
-            }
-            return null;
-          },
-        ),
-        HostFunction(
-          schema: const HostFunctionSchema(
-            name: 'prompt_show',
-            description:
-                'Return the currently-synthesized AI Pilot system prompt '
-                '(default rules + extension contexts + runtime API + this '
-                "script's registered fragments). Useful for debugging the "
-                'layered prompt.',
-          ),
-          handler: (args, ctx) async => snapshotBuilder?.call() ?? '',
-        ),
-      ];
+    HostFunction(
+      schema: const HostFunctionSchema(
+        name: 'prompt_extend',
+        description:
+            'Register a fragment that will be injected into the AI '
+            "Pilot's system prompt for the current script. Call near the "
+            'top of the script to declare its purpose / inputs / scope.',
+        params: [
+          HostParam(name: 'text', type: HostParamType.string),
+        ],
+      ),
+      handler: (args, ctx) async {
+        final text = (args['text'] as String?)?.trim() ?? '';
+        if (text.isNotEmpty) {
+          _fragments.add(text);
+          notifyListeners();
+        }
+        return null;
+      },
+    ),
+    HostFunction(
+      schema: const HostFunctionSchema(
+        name: 'prompt_show',
+        description:
+            'Return the currently-synthesized AI Pilot system prompt '
+            '(default rules + extension contexts + runtime API + this '
+            "script's registered fragments). Useful for debugging the "
+            'layered prompt.',
+      ),
+      handler: (args, ctx) async => snapshotBuilder?.call() ?? '',
+    ),
+  ];
 }

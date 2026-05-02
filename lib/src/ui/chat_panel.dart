@@ -21,8 +21,10 @@ class ChatMessage {
     this.toolCallId,
     this.toolCalls,
   }) : _content = content {
-    _throttledStream = _contentController.stream
-        .throttleTime(const Duration(milliseconds: 100), trailing: true);
+    _throttledStream = _contentController.stream.throttleTime(
+      const Duration(milliseconds: 100),
+      trailing: true,
+    );
   }
 
   /// The role producing this message (`'user'`, `'assistant'`, `'tool'`).
@@ -165,7 +167,10 @@ class _ChatPanelState extends State<ChatPanel> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                const Text('ASSISTANT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                const Text(
+                  'ASSISTANT',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                ),
                 const SizedBox(width: 8),
                 IconButton(
                   padding: EdgeInsets.zero,
@@ -179,7 +184,11 @@ class _ChatPanelState extends State<ChatPanel> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: () => setState(() => _showDebug = !_showDebug),
-                  icon: Icon(Icons.bug_report, size: 14, color: _showDebug ? Colors.red : null),
+                  icon: Icon(
+                    Icons.bug_report,
+                    size: 14,
+                    color: _showDebug ? Colors.red : null,
+                  ),
                   tooltip: 'Show Debug Logs',
                 ),
                 if (widget.onClearChat != null) ...[
@@ -196,8 +205,13 @@ class _ChatPanelState extends State<ChatPanel> {
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  onPressed: () => setState(() => _showSettings = !_showSettings),
-                  icon: Icon(Icons.settings, size: 14, color: _showSettings ? Colors.blue : null),
+                  onPressed: () =>
+                      setState(() => _showSettings = !_showSettings),
+                  icon: Icon(
+                    Icons.settings,
+                    size: 14,
+                    color: _showSettings ? Colors.blue : null,
+                  ),
                   tooltip: 'LLM Settings',
                 ),
                 const SizedBox(width: 8),
@@ -229,7 +243,10 @@ class _ChatPanelState extends State<ChatPanel> {
                         onChanged: widget.onTemperatureChanged,
                       ),
                     ),
-                    Text(widget.temperature.toStringAsFixed(1), style: const TextStyle(fontSize: 10)),
+                    Text(
+                      widget.temperature.toStringAsFixed(1),
+                      style: const TextStyle(fontSize: 10),
+                    ),
                   ],
                 ),
               ],
@@ -244,12 +261,18 @@ class _ChatPanelState extends State<ChatPanel> {
             child: SingleChildScrollView(
               child: SelectableText(
                 widget.debugLog,
-                style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontFamily: 'monospace'),
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                ),
               ),
             ),
           ),
-        if (widget.ollamaReachable == false) _OllamaUnreachableBanner()
-        else if (widget.ollamaReachable == null) _OllamaProbingBanner(),
+        if (widget.ollamaReachable == false)
+          _OllamaUnreachableBanner()
+        else if (widget.ollamaReachable == null)
+          _OllamaProbingBanner(),
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
@@ -261,7 +284,8 @@ class _ChatPanelState extends State<ChatPanel> {
               return _ChatMessageWidget(
                 key: ValueKey(msg),
                 message: msg,
-                isStreaming: widget.isStreaming && index == widget.messages.length - 1,
+                isStreaming:
+                    widget.isStreaming && index == widget.messages.length - 1,
                 onCopyToEditor: widget.onCopyToEditor,
               );
             },
@@ -271,14 +295,21 @@ class _ChatPanelState extends State<ChatPanel> {
           color: Theme.of(context).cardColor,
           child: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: Theme.of(context).dividerColor))),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _inputController,
                     focusNode: _inputFocusNode,
-                    decoration: const InputDecoration(hintText: 'Ask the Monty Assistant...', border: InputBorder.none),
+                    decoration: const InputDecoration(
+                      hintText: 'Ask the Monty Assistant...',
+                      border: InputBorder.none,
+                    ),
                     onSubmitted: (_) => _sendMessage(),
                     autofocus: true,
                   ),
@@ -306,7 +337,13 @@ class _ChatPanelState extends State<ChatPanel> {
   void _scrollToBottom({bool force = false}) {
     if (!_scrollController.hasClients) return;
     if (force) {
-      unawaited(_scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut));
+      unawaited(
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        ),
+      );
     } else {
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     }
@@ -331,7 +368,12 @@ class _ChatPanelState extends State<ChatPanel> {
 }
 
 class _ChatMessageWidget extends StatefulWidget {
-  const _ChatMessageWidget({required this.message, required this.onCopyToEditor, this.isStreaming = false, super.key});
+  const _ChatMessageWidget({
+    required this.message,
+    required this.onCopyToEditor,
+    this.isStreaming = false,
+    super.key,
+  });
   final ChatMessage message;
   final ValueChanged<String> onCopyToEditor;
   final bool isStreaming;
@@ -339,7 +381,8 @@ class _ChatMessageWidget extends StatefulWidget {
   State<_ChatMessageWidget> createState() => _ChatMessageWidgetState();
 }
 
-class _ChatMessageWidgetState extends State<_ChatMessageWidget> with AutomaticKeepAliveClientMixin {
+class _ChatMessageWidgetState extends State<_ChatMessageWidget>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
   @override
@@ -350,7 +393,16 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget> with AutomaticKe
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.message.role.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: widget.message.role == 'user' ? Colors.blue : Colors.purple)),
+          Text(
+            widget.message.role.toUpperCase(),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              color: widget.message.role == 'user'
+                  ? Colors.blue
+                  : Colors.purple,
+            ),
+          ),
           const SizedBox(height: 4),
           StreamBuilder<String>(
             stream: widget.message.contentStream,
@@ -359,7 +411,9 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget> with AutomaticKe
               return MarkdownBody(
                 data: snapshot.data ?? '',
                 selectable: !widget.isStreaming,
-                builders: {'code': _CodeBlockBuilder(onCopy: widget.onCopyToEditor)},
+                builders: {
+                  'code': _CodeBlockBuilder(onCopy: widget.onCopyToEditor),
+                },
               );
             },
           ),
@@ -385,18 +439,36 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
             color: Colors.grey[200],
             child: Row(
               children: [
-                const Text('Python', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Python',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                ),
                 const Spacer(),
                 InkWell(
                   onTap: () => onCopy(text),
                   child: const Row(
-                    children: [Icon(Icons.copy_all, size: 14), SizedBox(width: 4), Text('COPY TO EDITOR', style: TextStyle(fontSize: 10))],
+                    children: [
+                      Icon(Icons.copy_all, size: 14),
+                      SizedBox(width: 4),
+                      Text('COPY TO EDITOR', style: TextStyle(fontSize: 10)),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          Container(padding: const EdgeInsets.all(8), color: Colors.black87, child: Text(text, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12))),
+          Container(
+            padding: const EdgeInsets.all(8),
+            color: Colors.black87,
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -425,7 +497,11 @@ class _OllamaUnreachableBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 20),
+          Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.orange.shade800,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(

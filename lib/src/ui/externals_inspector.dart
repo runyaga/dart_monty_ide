@@ -71,8 +71,9 @@ class ExternalsInspector extends StatelessWidget {
                       ),
                     ),
                     children: ext.functions.map((fn) {
-                      final args =
-                          fn.schema.params.map((p) => p.name).join(', ');
+                      final args = fn.schema.params
+                          .map((p) => p.name)
+                          .join(', ');
                       return ListTile(
                         title: Text(
                           '${fn.schema.name}($args)',

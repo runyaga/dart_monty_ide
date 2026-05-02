@@ -96,8 +96,7 @@ class MontyEditorState extends State<MontyEditor> {
   Widget build(BuildContext context) {
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
-        SingleActivator(LogicalKeyboardKey.keyF, meta: true):
-            _FindIntent(),
+        SingleActivator(LogicalKeyboardKey.keyF, meta: true): _FindIntent(),
         SingleActivator(LogicalKeyboardKey.escape): _CancelIntent(),
       },
       child: Actions(
@@ -141,26 +140,28 @@ class MontyEditorState extends State<MontyEditor> {
                 },
                 indicatorBuilder:
                     (context, editingController, chunkController, notifier) {
-                  return Row(
-                    children: [
-                      DefaultCodeLineNumber(
-                        controller: editingController,
-                        notifier: notifier,
-                      ),
-                      DefaultCodeChunkIndicator(
-                        width: 20,
-                        controller: chunkController,
-                        notifier: notifier,
-                      ),
-                    ],
-                  );
-                },
+                      return Row(
+                        children: [
+                          DefaultCodeLineNumber(
+                            controller: editingController,
+                            notifier: notifier,
+                          ),
+                          DefaultCodeChunkIndicator(
+                            width: 20,
+                            controller: chunkController,
+                            notifier: notifier,
+                          ),
+                        ],
+                      );
+                    },
               ),
             ),
             if (widget.showRunButton)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 color: Theme.of(context).cardColor,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -223,8 +224,9 @@ class _MontyFindWidget extends StatelessWidget implements PreferredSizeWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          border:
-              Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+          border: Border(
+            bottom: BorderSide(color: Theme.of(context).dividerColor),
+          ),
         ),
         child: ValueListenableBuilder<CodeFindValue?>(
           valueListenable: controller,

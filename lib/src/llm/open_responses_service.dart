@@ -2,7 +2,8 @@ import 'dart:async';
 import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:open_responses/open_responses.dart';
 
-/// Implementation of [LlmService] using the Open Responses (OpenAI-compatible) API.
+/// Implementation of [LlmService] using the Open Responses
+/// (OpenAI-compatible) API.
 class OpenResponsesLlmService implements LlmService {
   OpenResponsesClient? _client;
 
@@ -15,8 +16,9 @@ class OpenResponsesLlmService implements LlmService {
     final client = OpenResponsesClient(
       config: OpenResponsesConfig(
         baseUrl: config.baseUrl,
-        authProvider:
-            config.apiKey != null ? BearerTokenProvider(config.apiKey!) : null,
+        authProvider: config.apiKey != null
+            ? BearerTokenProvider(config.apiKey!)
+            : null,
       ),
     );
     _client = client;
@@ -25,7 +27,8 @@ class OpenResponsesLlmService implements LlmService {
 
     // OpenResponses 0.3.2 uses a different structure.
     // For now, we'll implement a minimal mapping or fallback.
-    // Given the major API mismatch, I will implement a placeholder that doesn't break build.
+    // Given the major API mismatch, I will implement a placeholder that
+    // doesn't break build.
 
     unawaited(() async {
       try {

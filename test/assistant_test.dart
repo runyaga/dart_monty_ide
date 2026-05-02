@@ -5,7 +5,6 @@ import 'package:dart_monty_ide/src/llm/llm_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class MockLlmService implements LlmService {
-
   MockLlmService(this.responses);
   final List<LlmResponseChunk> responses;
   int _callCount = 0;
@@ -44,8 +43,10 @@ class MockToolHandler implements AssistantToolHandler {
       {'status': 'success', 'content': 'mock content'};
 
   @override
-  Future<Map<String, dynamic>> listFiles() async =>
-      {'status': 'success', 'files': ['test.py']};
+  Future<Map<String, dynamic>> listFiles() async => {
+    'status': 'success',
+    'files': ['test.py'],
+  };
 
   @override
   Future<Map<String, dynamic>> uiState() async =>
@@ -100,26 +101,40 @@ void main() {
 
     expect(result, contains('x equals 42'));
     expect(controller.history.length, equals(6));
-    
+
     // Verify events
-    expect(events.any((e) => e is ToolCallEvent && e.name == 'type_check'), isTrue);
-    expect(events.any((e) => e is ToolCallEvent && e.name == 'run_python'), isTrue);
-    expect(events.any((e) => e is AssistantTextEvent && e.text.contains('verified')), isTrue);
+    expect(
+      events.any((e) => e is ToolCallEvent && e.name == 'type_check'),
+      isTrue,
+    );
+    expect(
+      events.any((e) => e is ToolCallEvent && e.name == 'run_python'),
+      isTrue,
+    );
+    expect(
+      events.any(
+        (e) => e is AssistantTextEvent && e.text.contains('verified'),
+      ),
+      isTrue,
+    );
   });
 
   test('AssistantController max turns test', () async {
     // LLM keeps calling type_check forever
-    final mockLlm = MockLlmService(List.generate(10, (index) => 
-      const LlmResponseChunk(
-        toolCalls: [
-          LlmToolCall(
-            id: 'call_loop',
-            name: 'type_check',
-            arguments: {'code': 'x = 1'},
-          ),
-        ],
+    final mockLlm = MockLlmService(
+      List.generate(
+        10,
+        (index) => const LlmResponseChunk(
+          toolCalls: [
+            LlmToolCall(
+              id: 'call_loop',
+              name: 'type_check',
+              arguments: {'code': 'x = 1'},
+            ),
+          ],
+        ),
       ),
-    ),);
+    );
 
     final controller = AssistantController(
       toolHandler: MockToolHandler(),

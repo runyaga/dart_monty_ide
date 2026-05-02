@@ -50,7 +50,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.play_arrow));
       await tester.pump();
       expect(runPressed, isTrue);
-      
+
       // Clear pending cursor blink timers
       await tester.pump(const Duration(seconds: 1));
       controller.dispose();

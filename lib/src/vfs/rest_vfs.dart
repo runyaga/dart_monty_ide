@@ -17,9 +17,9 @@ class RestMontyVfs implements MontyVfs {
   final String? authToken;
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        if (authToken != null) 'Authorization': 'Bearer $authToken',
-      };
+    'Content-Type': 'application/json',
+    if (authToken != null) 'Authorization': 'Bearer $authToken',
+  };
 
   @override
   Future<List<String>> listFiles() async {

@@ -61,12 +61,12 @@ class AssistantController {
     required this.config,
     String? systemPrompt,
     String Function()? systemPromptBuilder,
-  })  : assert(
-          systemPrompt != null || systemPromptBuilder != null,
-          'Provide systemPrompt or systemPromptBuilder',
-        ),
-        _staticSystemPrompt = systemPrompt,
-        _systemPromptBuilder = systemPromptBuilder;
+  }) : assert(
+         systemPrompt != null || systemPromptBuilder != null,
+         'Provide systemPrompt or systemPromptBuilder',
+       ),
+       _staticSystemPrompt = systemPrompt,
+       _systemPromptBuilder = systemPromptBuilder;
 
   /// The tool handler to execute tools.
   final AssistantToolHandler toolHandler;
@@ -113,7 +113,9 @@ class AssistantController {
   }
 
   /// Processes a user prompt and runs the verification loop.
-  /// An optional [context] can be provided to give the assistant more information about the current state.
+  ///
+  /// An optional [context] can be provided to give the assistant more
+  /// information about the current state.
   Future<String> processPrompt(String prompt, {String? context}) async {
     _isStopped = false;
     final content = context != null ? '$context\n\n$prompt' : prompt;
