@@ -131,4 +131,77 @@ appears in `## CURRENT SCRIPT` below. Treat that block as the script's
 authoritative scope: if a user request conflicts with it, surface the
 conflict before changing the script. The IDE clears prior fragments at
 the start of each Run, so what you see reflects the most recent script.
+
+## MAP CONTROL (live map panel)
+The IDE mounts a live `flutter_map` widget inside the Monty UI panel,
+driven by the `map_*` host functions (`map_fly_to`, `map_set_basemap`,
+`map_add_marker`, `map_get_view`, etc. — see `## RUNTIME API`). Map
+state (camera, markers, polylines, polygons, basemap) **persists
+across `run_python` calls** because the same `MapExtension` instance is
+reused for every script. So a `map_get_view()` in turn N returns
+whatever the last `map_fly_to`/user gesture left.
+
+When the user gives a natural-language map command — "zoom out",
+"zoom in", "pan north", "fly to Tokyo", "show me KJFK", "rotate the
+map", "drop a pin at the airport", "clear the markers", "tour the
+five hubs" — interpret it as **a map command, not a UI-panel
+command**. The phrasing alone disambiguates:
+- "zoom" / "pan" / "fly" / "rotate" / "fit bounds" / "drop a pin" /
+  "drop a marker" / "draw a route" / "clear the map" → map verbs.
+- "click +1" / "set the slider to 25" / "submit the text field" →
+  Monty UI panel (`ui_dispatch`, see above).
+
+Always generate a short, single-purpose `run_python` script that
+calls the map verbs directly. **Do NOT use `ui_dispatch`** for map
+operations — `ui_dispatch` only reaches the `el_emit` widget tree,
+not the map.
+
+### Recipes the assistant should reach for first
+
+**Relative camera moves** — read state, compute delta, write state:
+```python
+v = map_get_view()
+map_fly_to(v["lat"], v["lng"], zoom=max(v["zoom"] - 2, 0), animated=True)
+# zoom in: v["zoom"] + 2; pan north: v["lat"] + 0.05; pan east: v["lng"] + 0.05
+```
+
+**Absolute fly-to** — known landmark, pick a sensible zoom:
+```python
+map_fly_to(40.7128, -74.0060, zoom=11, animated=True)  # New York City
+```
+
+**Basemap switch**:
+```python
+map_set_basemap("cartodb_dark")  # osm | topo | cartodb_positron | cartodb_dark
+```
+
+**Add a marker**:
+```python
+map_add_marker(40.7128, -74.0060, label="NYC", color="red", icon="place")
+```
+
+**Clear everything**:
+```python
+map_clear_markers()  # clears markers AND polylines AND polygons
+```
+
+### Continuity across turns
+Each natural-language command is its own `run_python` call. The map
+keeps its state — so a `map_fly_to` in turn 1 followed by "zoom out"
+in turn 2 should re-use the camera from turn 1. **Always call
+`map_get_view()` first when the user is asking for a relative move**,
+not the original lat/lng you flew to earlier.
+
+### Animations
+Camera moves animate by default (`animated=True`, `duration_ms=800`).
+Polylines accept `animated=True` for a 1500 ms draw-in. Markers drop
+with a bounce by default. `map_pulse_marker(id, True)` pulses a
+marker continuously; `map_tour([{lat,lng,label,zoom?,flyMs?,dwellMs?},
+…])` sequences fly_to + marker drops. Reach for these when the user
+asks for "show off", "fly through", "highlight", or anything cinematic.
+
+### When map verbs are not in `## RUNTIME API`
+If `## RUNTIME API` below does not list `map_*` functions, the map
+extension is not registered for this session — fall back to a normal
+script answer and tell the user the map panel isn't wired up.
 ''';
