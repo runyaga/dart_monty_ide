@@ -28,7 +28,7 @@ class MontyUiPanel extends StatefulWidget {
 
   /// Optional SVG host api. When non-null, the panel mounts an
   /// [SvgPreviewPanel] above the el_emit tree.
-  final JovialSvgHostApi? svgHostApi;
+  final FlutterSvgHostApi? svgHostApi;
 
   /// Optional map host api. When non-null, the panel mounts a live
   /// flutter_map widget driven by `map_*` host function calls.

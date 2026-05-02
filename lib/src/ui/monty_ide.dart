@@ -46,7 +46,7 @@ class MontyIde extends StatefulWidget {
 
   /// Optional SVG host api to render `svg_render(...)` output in the
   /// editor area's preview panel. When `null`, no preview is shown.
-  final JovialSvgHostApi? svgHostApi;
+  final FlutterSvgHostApi? svgHostApi;
 
   /// Optional map host api. When non-null, the UI panel mounts a map
   /// widget driven by `map_*` host function calls.
