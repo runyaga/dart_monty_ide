@@ -1324,6 +1324,11 @@ while True:
         el_emit({
             "type": "column",
             "children": [
+                {"type": "row", "children": [
+                    {"type": "button", "id": "back",
+                     "label": "← Back to tables"},
+                    {"type": "button", "id": "quit", "label": "Quit"},
+                ]},
                 {"type": "text",
                  "value": f"📋 {selected}  ({count} row(s))",
                  "size": 18},
@@ -1331,11 +1336,6 @@ while True:
                 {"type": "text", "value": schema},
                 {"type": "text", "value": "Preview (first 10):"},
                 {"type": "text", "value": preview},
-                {"type": "row", "children": [
-                    {"type": "button", "id": "back",
-                     "label": "← Back to tables"},
-                    {"type": "button", "id": "quit", "label": "Quit"},
-                ]},
             ],
         })
 
