@@ -31,8 +31,8 @@ class _WindMapDemoPageState extends State<WindMapDemoPage> {
         children: [
           FlutterMap(
             options: const MapOptions(
-              initialCenter: LatLng(51.5, -0.1), // London
-              initialZoom: 5,
+              initialCenter: LatLng(29.76, -95.37), // Houston, TX
+              initialZoom: 7,
             ),
             children: [
               TileLayer(
