@@ -19,7 +19,9 @@ dependencies:
   file: ^7.0.0
   flutter:
     sdk: flutter
+  flutter_map: ^8.3.0
   flutter_markdown_plus: ^1.0.0
+  latlong2: ^0.9.1
   fl_chart: ^1.2.0
   hhg_dataframe:
     path: ../dart_monty_labs/packages/hhg_dataframe
