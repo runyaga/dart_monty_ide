@@ -71,14 +71,17 @@ class _WindParticleLayerState extends State<WindParticleLayer>
     final bounds = camera.visibleBounds;
     _ensureParticles(bounds);
 
-    return CustomPaint(
-      painter: _WindParticleMapPainter(
-        camera: camera,
-        particles: _particles,
-        speedScale: widget.speedScale,
-        bounds: bounds,
+    return IgnorePointer(
+      child: SizedBox.expand(
+        child: CustomPaint(
+          painter: _WindParticleMapPainter(
+            camera: camera,
+            particles: _particles,
+            speedScale: widget.speedScale,
+            bounds: bounds,
+          ),
+        ),
       ),
-      size: camera.nonRotatedSize,
     );
   }
 }
@@ -102,8 +105,22 @@ class _WindParticleMapPainter extends CustomPainter {
 
   static const _grid = _WindGrid();
 
+  static int _frameCount = 0;
+
   @override
   void paint(Canvas canvas, Size size) {
+    _frameCount++;
+    if (_frameCount % 60 == 1) {
+      debugPrint(
+        '[WindParticleLayer] frame=$_frameCount  size=$size  '
+        'particles=${particles.length}  '
+        'bounds=${bounds.south.toStringAsFixed(1)},'
+        '${bounds.west.toStringAsFixed(1)} → '
+        '${bounds.north.toStringAsFixed(1)},'
+        '${bounds.east.toStringAsFixed(1)}',
+      );
+    }
+
     final paint = Paint()..strokeCap = StrokeCap.round;
 
     for (final p in particles) {
