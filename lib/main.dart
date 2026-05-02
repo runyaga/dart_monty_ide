@@ -567,6 +567,10 @@ print(f"Final score: {score} / {asked}")
   await vfs.writeFile('examples/13_hhg_geo_airports.py', _hhgGeoAirportsScript);
   await vfs.writeFile('examples/14_hhg_map_basics.py', _hhgMapBasicsScript);
   await vfs.writeFile('examples/15_hhg_map_aviation.py', _hhgMapAviationScript);
+  await vfs.writeFile(
+    'examples/16_hhg_duckdb_inspector.py',
+    _hhgDuckdbInspectorScript,
+  );
 
   final files = await vfs.listFiles();
   var shouldUpdate = !files.contains('system_prompt.txt');
@@ -1119,47 +1123,75 @@ else:
 const _hhgMapAviationScript = r'''
 # HHG: aviation METAR — DuckDB + map cross-pillar demo.
 #
-# Loads live METAR data for NYC-area airports from the Aviation Weather
-# Center API, color-codes each airport by flight category (VFR=green,
-# MVFR=orange, IFR/LIFR=red), then waits for a marker tap to print
-# the raw METAR observation.
+# Composes hhg_duckdb (SQL) with hhg_map (camera + colored markers)
+# in one dart_monty script. Color-codes each airport by flight
+# category (VFR=green, MVFR=orange, IFR=red, LIFR=purple) and waits
+# for a marker tap to print the raw METAR observation.
 #
-# Requires: DuckDB httpfs extension + internet access.
-# Run: duck_execute("INSTALL httpfs") once if not already installed.
-# Open the Monty UI panel before running.
+# NOTE: the live AviationWeather.gov API is CORS-blocked when run in
+# a browser host (`flutter run -d chrome`). This script ships a
+# hardcoded snapshot so it runs identically on macOS (FFI) and
+# Chrome (WASM). To switch to live data on a backend that proxies
+# CORS, replace the INSERTs with:
+#   duck_execute("INSTALL httpfs; LOAD httpfs;")
+#   duck_execute("CREATE OR REPLACE TABLE metars AS ... read_json_auto(...)")
+# Open the Monty UI panel before running so the map is mounted.
 requires([
     "duck_execute", "duck_query_records",
     "map_set_basemap", "map_fly_to", "map_clear_markers",
     "map_add_marker", "map_fit_bounds_to_markers", "map_recv",
 ])
 
-duck_execute("INSTALL httpfs; LOAD httpfs;")
-
-# Pull live METARs for major US East Coast hubs
 duck_execute("""
-CREATE OR REPLACE TABLE metars AS
-  SELECT icaoId, name,
-         CAST(lat  AS DOUBLE) AS lat,
-         CAST(lon  AS DOUBLE) AS lng,
-         fltCat, wspd, wdir, altim, temp, rawOb
-  FROM read_json_auto(
-    'https://aviationweather.gov/api/data/metar?ids=KJFK,KLGA,KEWR,KBOS,KORD,KATL,KDFW,KLAX&format=json'
-  )
+CREATE OR REPLACE TABLE airports (
+    icaoId VARCHAR, name VARCHAR, lat DOUBLE, lng DOUBLE
+)
+""")
+duck_execute("""
+INSERT INTO airports VALUES
+    ('KJFK', 'John F. Kennedy Intl', 40.6413, -73.7781),
+    ('KEWR', 'Newark Liberty Intl',  40.6895, -74.1745),
+    ('KLGA', 'LaGuardia',            40.7769, -73.8740),
+    ('KBOS', 'Boston Logan',         42.3656, -71.0096),
+    ('KORD', 'Chicago O''Hare',      41.9742, -87.9073)
 """)
 
-rows = duck_query_records("SELECT * FROM metars ORDER BY icaoId")
+duck_execute("""
+CREATE OR REPLACE TABLE metars (
+    icaoId VARCHAR, fltCat VARCHAR, wspd INTEGER, wdir INTEGER,
+    altim DOUBLE, temp DOUBLE, rawOb VARCHAR
+)
+""")
+duck_execute("""
+INSERT INTO metars VALUES
+    ('KJFK', 'VFR',  10, 220, 30.01, 22.0, 'KJFK 011451Z 22010KT 10SM FEW250 22/14 A3001 RMK AO2 SLP163 T02220139'),
+    ('KEWR', 'MVFR', 14, 220, 29.99, 18.0, 'KEWR 011451Z 22014KT 6SM BR BKN012 OVC025 18/16 A2999'),
+    ('KLGA', 'VFR',   8, 230, 30.00, 21.0, 'KLGA 011451Z 23008KT 10SM SCT040 21/15 A3000 RMK AO2 SLP159'),
+    ('KBOS', 'IFR',  18,  40, 29.87, 14.0, 'KBOS 011454Z 04018KT 2SM -RA BR BKN006 OVC012 14/13 A2987'),
+    ('KORD', 'LIFR', 22,  90, 29.78, 18.0, 'KORD 011451Z 09022KT 1/2SM TS BKN004 OVC010 18/17 A2978')
+""")
+
+rows = duck_query_records("""
+SELECT a.icaoId, a.name, a.lat, a.lng,
+       m.fltCat, m.wspd, m.wdir, m.altim, m.temp, m.rawOb
+FROM airports a JOIN metars m ON a.icaoId = m.icaoId
+ORDER BY a.icaoId
+""")
 print(f"Loaded {len(rows)} METARs")
 
 map_set_basemap("cartodb_positron")
-map_fly_to(39.5, -95.0, zoom=4, animated=False)
+map_fly_to(40.7128, -74.0060, zoom=6, animated=False)
 map_clear_markers()
 
-flt_color = {"VFR": "green", "MVFR": "orange", "IFR": "red", "LIFR": "red"}
+flt_color = {"VFR": "green", "MVFR": "orange", "IFR": "red", "LIFR": "purple"}
 
 for r in rows:
     color = flt_color.get(r["fltCat"], "grey")
     label = f"{r['icaoId']} {r['fltCat'] or '?'}"
-    map_add_marker(r["lat"], r["lng"], label=label, color=color, icon="flight")
+    map_add_marker(
+        r["lat"], r["lng"],
+        label=label, color=color, icon="local_airport",
+    )
 
 map_fit_bounds_to_markers(padding=80)
 print("Tap a marker to see its METAR. Waiting 60 s…")
@@ -1177,4 +1209,134 @@ while True:
             print(f"  Flight cat: {match['fltCat']}  Wind: {match['wdir']}° @ {match['wspd']} kt")
             print(f"  Altimeter:  {match['altim']} inHg  Temp: {match['temp']}°C")
             print(f"  Raw METAR:  {match['rawOb']}")
+''';
+
+const _hhgDuckdbInspectorScript = r'''
+# HHG: DuckDB Inspector — generates a Flutter UI to browse the
+# in-memory DuckDB database, listing tables and previewing rows.
+#
+# Demonstrates composing hhg_duckdb (SQL) with the el_emit / el_recv
+# UI loop. No live data needed — works on macOS (FFI) and Chrome
+# (WASM) identically. Open the Monty UI panel before running.
+prompt_extend(
+    "DuckDB Inspector: lists every table in the in-memory database, "
+    "lets the user click a table to see its schema and the first 10 "
+    "rows. Pure el_emit / el_recv UI — no LLM."
+)
+requires(["duck_execute", "duck_query_records"])
+
+# Seed a couple of sample tables so there's something to inspect on
+# a fresh run. If tables already exist (e.g. from running the
+# aviation example first) these CREATE OR REPLACEs reset them.
+duck_execute("""
+CREATE OR REPLACE TABLE airports (
+    icao VARCHAR, name VARCHAR, lat DOUBLE, lng DOUBLE
+)
+""")
+duck_execute("""
+INSERT INTO airports VALUES
+    ('KJFK', 'John F. Kennedy Intl', 40.6413, -73.7781),
+    ('KEWR', 'Newark Liberty Intl',  40.6895, -74.1745),
+    ('KLGA', 'LaGuardia',            40.7769, -73.8740)
+""")
+duck_execute("""
+CREATE OR REPLACE TABLE flights (
+    carrier VARCHAR, route VARCHAR, monthly_pax INTEGER
+)
+""")
+duck_execute("""
+INSERT INTO flights VALUES
+    ('AA',     'KJFK→KLAX',  92410),
+    ('UA',     'KEWR→KSFO',  78650),
+    ('DL',     'KLGA→KATL',  64200),
+    ('B6',     'KJFK→KBOS',  41780)
+""")
+
+def list_tables():
+    rows = duck_query_records(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema='main' ORDER BY table_name"
+    )
+    return [r["table_name"] for r in rows]
+
+def schema_text(table):
+    info = duck_query_records(f"PRAGMA table_info('{table}')")
+    if not info:
+        return "(no columns)"
+    return "\n".join(f"  • {r['name']} : {r['type']}" for r in info)
+
+def preview_text(table, n=10):
+    rows = duck_query_records(f'SELECT * FROM "{table}" LIMIT {n}')
+    if not rows:
+        return "(empty)"
+    headers = list(rows[0].keys())
+    out = "  " + " | ".join(headers)
+    for r in rows:
+        out = out + "\n  " + " | ".join(str(r[h]) for h in headers)
+    return out
+
+def row_count(table):
+    return duck_query_records(f'SELECT count(*) AS n FROM "{table}"')[0]["n"]
+
+selected = None  # currently drilled-into table name
+
+while True:
+    if selected is None:
+        # ------- Table list view --------------------------------
+        tables = list_tables()
+        children = [
+            {"type": "text", "value": "🦆 DuckDB Inspector", "size": 18},
+            {"type": "text",
+             "value": f"{len(tables)} table(s) in main schema. "
+                      f"Click one to drill in."},
+        ]
+        for t in tables:
+            children.append(
+                {"type": "button", "id": f"tbl:{t}", "label": f"📋 {t}"}
+            )
+        children.append({"type": "row", "children": [
+            {"type": "button", "id": "refresh", "label": "🔄 Refresh"},
+            {"type": "button", "id": "quit", "label": "Quit"},
+        ]})
+        el_emit({"type": "column", "children": children})
+    else:
+        # ------- Table detail view ------------------------------
+        try:
+            schema = schema_text(selected)
+            preview = preview_text(selected)
+            count = row_count(selected)
+        except Exception as e:
+            schema = ""
+            preview = f"(error: {e})"
+            count = 0
+        el_emit({
+            "type": "column",
+            "children": [
+                {"type": "text",
+                 "value": f"📋 {selected}  ({count} row(s))",
+                 "size": 18},
+                {"type": "text", "value": "Schema:"},
+                {"type": "text", "value": schema},
+                {"type": "text", "value": "Preview (first 10):"},
+                {"type": "text", "value": preview},
+                {"type": "row", "children": [
+                    {"type": "button", "id": "back",
+                     "label": "← Back to tables"},
+                    {"type": "button", "id": "quit", "label": "Quit"},
+                ]},
+            ],
+        })
+
+    evt = el_recv()
+    if evt["type"] == "quit" or evt["target"] == "quit":
+        break
+    target = evt["target"]
+    if target == "back":
+        selected = None
+    elif target == "refresh":
+        pass  # loop re-renders the table list
+    elif target.startswith("tbl:"):
+        selected = target[4:]
+
+print("DuckDB inspector closed.")
 ''';
