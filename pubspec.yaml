@@ -23,6 +23,10 @@ dependencies:
     path: ../dart_monty_labs/packages/hhg_duckdb
   hhg_geoengine:
     path: ../dart_monty_labs-hhg-geoengine/packages/hhg_geoengine
+  hhg_flutter_map:
+    path: ../dart_monty_labs-hhg-map/packages/hhg_flutter_map
+  hhg_map:
+    path: ../dart_monty_labs-hhg-map/packages/hhg_map
   hhg_svg:
     path: ../dart_monty_labs/packages/hhg_svg
   flutter:

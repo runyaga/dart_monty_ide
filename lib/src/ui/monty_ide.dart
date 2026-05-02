@@ -14,7 +14,7 @@ import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
 import 'package:dart_monty_ide/src/bridge/console_svg_host_api.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
-import 'package:dart_monty_ide/src/ui/svg_preview_panel.dart';
+import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -28,6 +28,7 @@ class MontyIde extends StatefulWidget {
     this.controller,
     this.registry,
     this.svgHostApi,
+    this.mapHostApi,
     super.key,
   });
 
@@ -38,6 +39,10 @@ class MontyIde extends StatefulWidget {
   /// Optional SVG host api to render `svg_render(...)` output in the
   /// editor area's preview panel. When `null`, no preview is shown.
   final ConsoleSvgHostApi? svgHostApi;
+
+  /// Optional map host api. When non-null, the UI panel mounts a map
+  /// widget driven by `map_*` host function calls.
+  final FlutterMapHostApi? mapHostApi;
 
   @override
   State<MontyIde> createState() => _MontyIdeState();
@@ -455,6 +460,7 @@ class _MontyIdeState extends State<MontyIde> {
               eventLoop: _eventLoop!,
               onClose: () => setState(() => _showUiPanel = false),
               svgHostApi: widget.svgHostApi,
+              mapHostApi: widget.mapHostApi,
             ),
           ),
         ],

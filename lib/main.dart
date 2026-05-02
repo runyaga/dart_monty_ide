@@ -20,7 +20,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_dataframe/hhg_dataframe.dart';
 import 'package:hhg_duckdb/hhg_duckdb.dart';
+import 'package:hhg_flutter_map/hhg_flutter_map.dart';
 import 'package:hhg_geoengine/hhg_geoengine.dart';
+import 'package:hhg_map/hhg_map.dart';
 import 'package:hhg_svg/hhg_svg.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -72,6 +74,7 @@ void main() async {
   final svgHostApi = ConsoleSvgHostApi(
     (line) => controller.appendOutput(line),
   );
+  final mapHostApi = FlutterMapHostApi();
 
   List<MontyExtension> extensionsFactory() {
     final flutterExt = MontyFlutterExtension(registry);
@@ -89,6 +92,7 @@ void main() async {
     // can Allow Anyway in System Preferences > Privacy & Security.
     final duckDbExt = DuckDbExtension(autoLoadSpatial: false);
     final svgExt = SvgExtension(hostApi: svgHostApi);
+    final mapExt = MapExtension(hostApi: mapHostApi);
     final geoExt = GeoEngineExtension();
     final exts = <MontyExtension>[
       flutterExt,
@@ -98,6 +102,7 @@ void main() async {
       dataframeExt,
       duckDbExt,
       svgExt,
+      mapExt,
       geoExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
@@ -566,6 +571,7 @@ print(f"Final score: {score} / {asked}")
     controller: controller,
     registry: registry,
     svgHostApi: svgHostApi,
+    mapHostApi: mapHostApi,
   ));
 }
 
@@ -577,6 +583,7 @@ class MyApp extends StatelessWidget {
     required this.controller,
     required this.registry,
     required this.svgHostApi,
+    required this.mapHostApi,
     super.key,
   });
 
@@ -595,6 +602,9 @@ class MyApp extends StatelessWidget {
   /// output.
   final ConsoleSvgHostApi svgHostApi;
 
+  /// The host api the map panel watches for `map_*` calls.
+  final FlutterMapHostApi mapHostApi;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -609,6 +619,7 @@ class MyApp extends StatelessWidget {
         controller: controller,
         registry: registry,
         svgHostApi: svgHostApi,
+        mapHostApi: mapHostApi,
       ),
     );
   }
@@ -622,6 +633,7 @@ class MyHomePage extends StatelessWidget {
     required this.controller,
     required this.registry,
     required this.svgHostApi,
+    required this.mapHostApi,
     super.key,
   });
 
@@ -637,6 +649,9 @@ class MyHomePage extends StatelessWidget {
   /// SVG host api for the preview panel.
   final ConsoleSvgHostApi svgHostApi;
 
+  /// Map host api for the map panel.
+  final FlutterMapHostApi mapHostApi;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -649,6 +664,7 @@ class MyHomePage extends StatelessWidget {
         controller: controller,
         registry: registry,
         svgHostApi: svgHostApi,
+        mapHostApi: mapHostApi,
       ),
     );
   }
