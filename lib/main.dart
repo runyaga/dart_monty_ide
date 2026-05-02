@@ -544,6 +544,9 @@ print(f"Final score: {score} / {asked}")
     'examples/10_hhg_strict.py',
     _hhgStrictScript,
   );
+  await vfs.writeFile('examples/11_hhg_geo_mgrs.py', _hhgGeoMgrsScript);
+  await vfs.writeFile('examples/12_hhg_geo_utm.py', _hhgGeoUtmScript);
+  await vfs.writeFile('examples/13_hhg_geo_airports.py', _hhgGeoAirportsScript);
 
   final files = await vfs.listFiles();
   bool shouldUpdate = !files.contains('system_prompt.txt');
@@ -935,4 +938,108 @@ print("Loaded " + str(len(records)) + " records")
 # Strict typecheck flags this; without strict, dispatch fails at
 # runtime with a less precise error.
 df_filter(df, where="this should be a dict")
+''';
+
+const _hhgGeoMgrsScript = r'''
+# HHG: MGRS encode / decode — convert a lat/lng to a military-grid
+# reference string and back.
+#
+# geo_mgrs_encode(lat, lng, precision=5) -> str
+#   precision 1 = 10 km grid, 2 = 1 km, 3 = 100 m, 4 = 10 m, 5 = 1 m
+#
+# geo_mgrs_decode(mgrs) -> {"lat", "lng", "precision"}
+#   returns the SW corner of the implied grid square; add half the
+#   grid-square size to get the centroid.
+#
+# Polar regions (|lat| > 84 / lat < -80) raise ValueError.
+requires(["geo_mgrs_encode", "geo_mgrs_decode"])
+
+# KJFK airport — JFK, New York
+mgrs_1m   = geo_mgrs_encode(40.6398, -73.7789)
+mgrs_100m = geo_mgrs_encode(40.6398, -73.7789, precision=3)
+mgrs_1km  = geo_mgrs_encode(40.6398, -73.7789, precision=2)
+print("KJFK MGRS (1 m):   " + mgrs_1m)
+print("KJFK MGRS (100 m): " + mgrs_100m)
+print("KJFK MGRS (1 km):  " + mgrs_1km)
+
+# Decode back to SW-corner lat/lng
+decoded = geo_mgrs_decode(mgrs_1m)
+print("decoded SW corner: " + str(round(decoded["lat"], 6)) + ", " + str(round(decoded["lng"], 6)))
+
+# Centroid: add half a 1 m grid-square (≈ 0.5 / 111 111 degrees)
+half_m = 0.5 / 111_111
+print("centroid approx:   " + str(round(decoded["lat"] + half_m, 6)) + ", " + str(round(decoded["lng"] + half_m, 6)))
+
+# Lower-case and internal whitespace are both tolerated
+decoded2 = geo_mgrs_decode("18t xk 03254 99489")
+print("whitespace/lower:  " + str(round(decoded2["lat"], 6)) + ", " + str(round(decoded2["lng"], 6)))
+''';
+
+const _hhgGeoUtmScript = r'''
+# HHG: UTM zone discovery + forward/inverse projection.
+#
+# geo_utm_zone(lat, lng) -> {"zone", "hemisphere", "epsg"}
+#   Includes Norway zone-32V exception and Svalbard 31X/33X/35X/37X.
+#
+# geo_latlon_to_utm(lat, lng, zone=None) -> {"zone","hemisphere","easting","northing","epsg"}
+#   Pass zone to force projection into a specific zone (useful for
+#   surveys straddling a zone boundary).
+#
+# geo_utm_to_latlon(zone, hemisphere, easting, northing) -> {"lat","lng"}
+requires(["geo_utm_zone", "geo_latlon_to_utm", "geo_utm_to_latlon"])
+
+# KJFK — zone 18N
+z = geo_utm_zone(40.6398, -73.7789)
+print("KJFK zone:  " + str(z["zone"]) + z["hemisphere"] + "  EPSG:" + str(z["epsg"]))
+
+utm = geo_latlon_to_utm(40.6398, -73.7789)
+print("easting:    " + str(round(utm["easting"], 1)) + " m")
+print("northing:   " + str(round(utm["northing"], 1)) + " m")
+
+# Round-trip — should close to < 1e-6 degrees (~11 cm)
+pt = geo_utm_to_latlon(utm["zone"], utm["hemisphere"], utm["easting"], utm["northing"])
+print("round-trip: " + str(round(pt["lat"], 6)) + ", " + str(round(pt["lng"], 6)))
+print("original:   40.6398, -73.7789")
+
+# Force a neighbour zone (zone 19 central meridian = -69°; KJFK is off-centre)
+utm19 = geo_latlon_to_utm(40.6398, -73.7789, zone=19)
+print("zone 19 forced — easting: " + str(round(utm19["easting"], 1)) + " m  (< 500 000 = west of CM)")
+
+# Southern hemisphere — Sydney
+s = geo_latlon_to_utm(-33.8688, 151.2093)
+print("Sydney: " + str(s["zone"]) + s["hemisphere"] + "  E=" + str(round(s["easting"])) + "  N=" + str(round(s["northing"])))
+
+# Norway special case — Bergen → zone 32V (not 31V)
+no = geo_utm_zone(60.39, 5.32)
+print("Bergen: zone " + str(no["zone"]) + no["hemisphere"] + "  EPSG:" + str(no["epsg"]))
+''';
+
+const _hhgGeoAirportsScript = r'''
+# HHG: batch airport → MGRS + UTM zone table.
+# Shows geo_mgrs_encode and geo_utm_zone used together across a
+# list of well-known ICAO airports from different hemispheres and
+# UTM zones (including the Norway exception for Heathrow-adjacent
+# Scandinavian routes).
+requires(["geo_mgrs_encode", "geo_utm_zone"])
+
+airports = [
+    ("KJFK", 40.6398,   -73.7789),   # New York — JFK
+    ("EGLL", 51.4775,    -0.4614),   # London — Heathrow
+    ("LFPG", 49.0097,     2.5479),   # Paris — CDG
+    ("YSSY", -33.9461,  151.1772),   # Sydney — Kingsford Smith
+    ("NZAA", -37.0082,  174.7917),   # Auckland
+    ("UUEE",  55.9726,   37.4125),   # Moscow — Sheremetyevo
+    ("ENGM",  60.1939,   11.1004),   # Oslo — Gardermoen (Norway zone 32V)
+    ("ENBR",  60.2934,    5.2186),   # Bergen (Norway zone 32V)
+]
+
+print(f"{'ICAO':<6}  {'MGRS (1 m)':<20}  UTM zone  EPSG")
+print("-" * 56)
+for icao, lat, lng in airports:
+    try:
+        mgrs = geo_mgrs_encode(lat, lng, precision=5)
+        z    = geo_utm_zone(lat, lng)
+        print(f"{icao:<6}  {mgrs:<20}  {z['zone']}{z['hemisphere']:<8}  {z['epsg']}")
+    except ValueError as e:
+        print(f"{icao:<6}  ERROR: {e}")
 ''';
