@@ -14,6 +14,7 @@ import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
 import 'package:dart_monty_ide/src/ui/monty_editor.dart';
 import 'package:dart_monty_ide/src/ui/monty_ui_panel.dart';
+import 'package:dart_monty_ide/src/spikes/wind_particle_demo.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
@@ -734,6 +735,16 @@ class _MontyIdeState extends State<MontyIde> {
                 ),
                 tooltip: 'Monty UI Panel',
               ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const WindParticleDemoPage(),
+                ),
+              ),
+              icon: const Icon(Icons.air, size: 20),
+              tooltip: 'Wind particle spike',
+            ),
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: _controller.clearState,
