@@ -10,6 +10,7 @@ import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
 import 'package:dart_monty_ide/src/ui/chat_panel.dart';
+import 'package:dart_monty_ide/src/ui/duckdb_panel.dart';
 import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
@@ -100,12 +101,14 @@ class _MontyIdeState extends State<MontyIde> {
   bool _showExternals = false;
   bool _showFileExplorer = true;
   bool _showUiPanel = false;
+  bool _showDuckDb = false;
   bool _viewingAssistantBuffer = false;
 
   double _explorerWidth = 200;
   double _assistantWidth = 400;
   double _externalsWidth = 300;
   double _uiPanelWidth = 320;
+  double _duckDbWidth = 400;
 
   int _fileExplorerVersion = 0;
   // Bumped inside setState to mark the element dirty when reactive state
@@ -383,6 +386,7 @@ class _MontyIdeState extends State<MontyIde> {
   bool _strictMode = false;
 
   void _handleRun() {
+    if (_controller.isExecuting) return;
     final code = _viewingAssistantBuffer
         ? _assistantCodeController.text
         : _editorController.text;
@@ -529,6 +533,24 @@ class _MontyIdeState extends State<MontyIde> {
                 _assistant.clearHistory();
                 setState(_assistantMessages.clear);
               },
+            ),
+          ),
+        ],
+        if (_showDuckDb) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _duckDbWidth -= delta;
+                if (_duckDbWidth < 200) _duckDbWidth = 200;
+                if (_duckDbWidth > 700) _duckDbWidth = 700;
+              });
+            },
+          ),
+          SizedBox(
+            width: _duckDbWidth,
+            child: DuckDbPanel(
+              controller: _controller,
+              onClose: () => setState(() => _showDuckDb = false),
             ),
           ),
         ],
@@ -730,6 +752,16 @@ class _MontyIdeState extends State<MontyIde> {
               onPressed: () => setState(() => _showAssistant = !_showAssistant),
               icon: const Icon(Icons.chat, size: 20),
               tooltip: 'Assistant',
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _showDuckDb = !_showDuckDb),
+              icon: Icon(
+                Icons.storage,
+                color: _showDuckDb ? Colors.orange : null,
+                size: 20,
+              ),
+              tooltip: 'DuckDB',
             ),
             IconButton(
               visualDensity: VisualDensity.compact,

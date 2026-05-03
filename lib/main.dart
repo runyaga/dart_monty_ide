@@ -47,12 +47,15 @@ void main() async {
   }
 
   MontyVfs vfs;
+  var weatherDbPath = ':memory:';
   if (kIsWeb) {
     vfs = MemoryMontyVfs();
   } else {
     final appDocsDir = await getApplicationDocumentsDirectory();
     final workspacePath = '${appDocsDir.path}/monty_workspace';
     vfs = LocalMontyVfs(rootPath: workspacePath);
+    // Persistent DuckDB for weather grid (survives app restarts).
+    weatherDbPath = '${appDocsDir.path}/monty_weather.db';
   }
 
   // Setup Flutter Bridge.
@@ -92,6 +95,18 @@ void main() async {
   final mapHostApi = FlutterMapHostApi();
   final chartHostApi = FlChartHostApiImpl();
 
+  // Mutable reference to the current DuckDbExtension instance.
+  // Updated by extensionsFactory() on each interpreter reset so
+  // onForecastLoaded can always find the live connection.
+  DuckDbExtension? currentDuckDb;
+
+  mapHostApi.onForecastLoaded = (json, lats, lngs) async {
+    final conn = currentDuckDb?.connection;
+    if (conn != null) {
+      await _storeWeatherGrid(conn, json, lats, lngs);
+    }
+  };
+
   List<MontyExtension> extensionsFactory() {
     final flutterExt = MontyFlutterExtension(registry);
     final eventLoopExt = EventLoopExtension();
@@ -106,7 +121,14 @@ void main() async {
     // duck_execute("INSTALL spatial") + duck_execute("LOAD spatial")
     // themselves; the user will see the Gatekeeper prompt once and
     // can Allow Anyway in System Preferences > Privacy & Security.
-    final duckDbExt = DuckDbExtension(autoLoadSpatial: false);
+    //
+    // weatherDbPath is a persistent file so the weather_grid table
+    // survives app restarts and is queryable from Monty scripts.
+    final duckDbExt = DuckDbExtension(
+      databasePath: weatherDbPath,
+      autoLoadSpatial: false,
+    );
+    currentDuckDb = duckDbExt;
     final svgExt = SvgExtension(hostApi: svgHostApi);
     final mapExt = MapExtension(hostApi: mapHostApi);
     final geoExt = GeoEngineExtension();
@@ -604,6 +626,11 @@ print(f"Final score: {score} / {asked}")
     'examples/23_report_airports.py',
     _reportAirportsScript,
   );
+  await vfs.writeFile('examples/24_city_explorer.py', _cityExplorerScript);
+  await vfs.writeFile(
+    'examples/25_load_weather_grid.py',
+    _loadWeatherGridScript,
+  );
 
   final files = await vfs.listFiles();
   var shouldUpdate = !files.contains('system_prompt.txt');
@@ -628,6 +655,69 @@ print(f"Final score: {score} / {asked}")
       chartHostApi: chartHostApi,
     ),
   );
+}
+
+/// Writes the Open-Meteo forecast JSON list into a persistent DuckDB
+/// `weather_grid` table so Monty scripts can query it.
+///
+/// Schema: lat, lng, valid_time, temp_c, wind_speed_ms, wind_dir_deg,
+/// fetched_at.
+Future<void> _storeWeatherGrid(
+  Connection conn,
+  List<dynamic> json,
+  List<double> lats,
+  List<double> lngs,
+) async {
+  try {
+    await conn.execute('''
+CREATE OR REPLACE TABLE weather_grid (
+    lat           DOUBLE,
+    lng           DOUBLE,
+    valid_time    TIMESTAMP,
+    temp_c        DOUBLE,
+    wind_speed_ms DOUBLE,
+    wind_dir_deg  DOUBLE,
+    fetched_at    TIMESTAMP
+)
+''');
+    final appender = await conn.append('weather_grid', null);
+    final fetchedAt = DateTime.now().toUtc();
+    for (var i = 0; i < json.length; i++) {
+      final point = json[i] as Map<String, dynamic>;
+      final lat = (point['latitude'] as num).toDouble();
+      final lng = (point['longitude'] as num).toDouble();
+      final hourly = point['hourly'] as Map<String, dynamic>;
+      final times =
+          (hourly['time'] as List).cast<String>();
+      final temps =
+          (hourly['temperature_2m'] as List?)?.cast<Object?>() ?? [];
+      final speeds =
+          (hourly['wind_speed_10m'] as List?)?.cast<Object?>() ?? [];
+      final dirs =
+          (hourly['wind_direction_10m'] as List?)?.cast<Object?>() ?? [];
+      for (var t = 0; t < times.length; t++) {
+        final validTime = DateTime.parse('${times[t]}:00Z').toUtc();
+        final temp =
+            t < temps.length ? (temps[t] as num?)?.toDouble() : null;
+        final speed =
+            t < speeds.length ? (speeds[t] as num?)?.toDouble() : null;
+        final dir =
+            t < dirs.length ? (dirs[t] as num?)?.toDouble() : null;
+        appender.append(lat);
+        appender.append(lng);
+        appender.append(validTime);
+        appender.append(temp);
+        appender.append(speed);
+        appender.append(dir);
+        appender.append(fetchedAt);
+        appender.endRow();
+      }
+    }
+    appender.flush();
+    appender.dispose();
+  } on Exception catch (e) {
+    debugPrint('[weather_grid] DuckDB store failed: $e');
+  }
 }
 
 /// The main application widget.
@@ -1950,3 +2040,133 @@ else:
     map_fit_bounds_to_markers(40)
     print(f"Mapped {n} airports.")
 ''';
+
+const _cityExplorerScript = r'''
+# HHG: Interactive city explorer — tap a marker to see live weather + facts.
+# Drops 10 major US cities, listens for marker_tapped via map_recv,
+# and shows a live-weather detail card in the UI panel via el_emit.
+requires(["map_fly_to", "map_add_marker", "map_fit_bounds_to_markers",
+          "map_recv", "el_emit", "net_http_get_json"])
+
+CITIES = [
+    {"name": "New York",     "state": "NY", "lat": 40.7128, "lng": -74.0060,  "pop": "8.3M", "note": "The Big Apple"},
+    {"name": "Los Angeles",  "state": "CA", "lat": 34.0522, "lng": -118.2437, "pop": "3.9M", "note": "City of Angels"},
+    {"name": "Chicago",      "state": "IL", "lat": 41.8781, "lng": -87.6298,  "pop": "2.7M", "note": "The Windy City"},
+    {"name": "Houston",      "state": "TX", "lat": 29.7604, "lng": -95.3698,  "pop": "2.3M", "note": "Space City"},
+    {"name": "Phoenix",      "state": "AZ", "lat": 33.4484, "lng": -112.0740, "pop": "1.6M", "note": "Valley of the Sun"},
+    {"name": "Philadelphia", "state": "PA", "lat": 39.9526, "lng": -75.1652,  "pop": "1.6M", "note": "City of Brotherly Love"},
+    {"name": "Seattle",      "state": "WA", "lat": 47.6062, "lng": -122.3321, "pop": "0.7M", "note": "Emerald City"},
+    {"name": "Dallas",       "state": "TX", "lat": 32.7767, "lng": -96.7970,  "pop": "1.3M", "note": "Big D"},
+    {"name": "Miami",        "state": "FL", "lat": 25.7617, "lng": -80.1918,  "pop": "0.5M", "note": "Magic City"},
+    {"name": "Denver",       "state": "CO", "lat": 39.7392, "lng": -104.9903, "pop": "0.7M", "note": "Mile High City"},
+]
+
+def weather_desc(code):
+    if code is None: return "—"
+    if code == 0:    return "Clear sky"
+    if code <= 3:    return "Partly cloudy"
+    if code <= 48:   return "Foggy"
+    if code <= 67:   return "Rainy"
+    if code <= 77:   return "Snowy"
+    if code <= 82:   return "Showers"
+    return "Stormy"
+
+def fetch_weather(lat, lng):
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lng}"
+        "&current=temperature_2m,wind_speed_10m,weather_code"
+        "&wind_speed_unit=mph&forecast_days=1"
+    )
+    try:
+        cur = net_http_get_json(url)["current"]
+        return cur["temperature_2m"], cur["wind_speed_10m"], cur["weather_code"]
+    except Exception:
+        return None, None, None
+
+def show_idle():
+    el_emit({
+        "type": "column",
+        "children": [
+            {"type": "text", "value": "City Explorer", "size": 18},
+            {"type": "text", "value": "Tap any city marker to see\nlive weather and city facts.", "size": 13},
+        ],
+    })
+
+def show_detail(city):
+    temp, wind, code = fetch_weather(city["lat"], city["lng"])
+    temp_str = f"{temp:.1f} °C" if temp is not None else "—"
+    wind_str = f"{wind:.0f} mph" if wind is not None else "—"
+    el_emit({
+        "type": "column",
+        "children": [
+            {"type": "text", "value": f"{city['name']}, {city['state']}", "size": 20},
+            {"type": "text", "value": city["note"]},
+            {"type": "text", "value": f"Population: {city['pop']}"},
+            {"type": "text", "value": f"Weather: {weather_desc(code)}"},
+            {"type": "text", "value": f"Temperature: {temp_str}"},
+            {"type": "text", "value": f"Wind: {wind_str}"},
+        ],
+    })
+    print(f"Tapped {city['name']}: {temp_str}, {wind_str}, {weather_desc(code)}")
+
+# --- drop all markers ---
+marker_map = {}
+for c in CITIES:
+    mid = map_add_marker(
+        c["lat"], c["lng"],
+        label=c["name"],
+        icon="place",
+        color="blue",
+        drop_animation=True,
+    )
+    marker_map[mid] = c
+
+map_fit_bounds_to_markers(60)
+show_idle()
+print("Tap any city marker. Script runs for 5 minutes.")
+
+# --- event loop ---
+while True:
+    evt = map_recv(timeout_ms=300000)
+    if evt is None:
+        print("Timed out — re-run to continue.")
+        break
+    t = evt["type"]
+    if t == "marker_tapped":
+        city = marker_map.get(evt["marker_id"])
+        if city:
+            map_fly_to(city["lat"], city["lng"], zoom=10, animated=True)
+            show_detail(city)
+    elif t == "map_tapped":
+        show_idle()
+''';
+
+const _loadWeatherGridScript = '''
+# HHG: Fetch a 3-day global weather forecast and store it in DuckDB.
+#
+# Calling map_load_forecast():
+#   - Downloads hourly temp + wind data from Open-Meteo for a 6x8 global grid
+#   - Injects it into the live Temperature and Wind map layers immediately
+#   - Writes a weather_grid table to the persistent DuckDB database so
+#     you can query it from any script (survives app restarts)
+#
+# After running this script:
+#   map_set_weather_layer("temperature", enabled=True)
+#   map_set_weather_layer("wind", enabled=True)
+# ...to see the real data on the map.
+import json
+
+result = map_load_forecast(hours=72)
+print(json.dumps(result))
+
+if result.get("ok"):
+    pts: int = result["points"]
+    hrs: int = result["hours"]
+    at: str = result["fetched_at"]
+    print(f"Loaded {pts}-point grid, {hrs}h window, fetched at {at}")
+    print("weather_grid is now queryable from DuckDB.")
+else:
+    print("Fetch failed:", result.get("error", "unknown error"))
+''';
+

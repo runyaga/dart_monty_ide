@@ -102,5 +102,29 @@ void main() {
       ];
       expect(approxTokenCount(messages), 0);
     });
+
+    test('systemPromptChars are included in token count', () {
+      // 800 chars system prompt → 200 tokens
+      expect(approxTokenCount([], systemPromptChars: 800), 200);
+    });
+
+    test('systemPromptChars added to message chars', () {
+      // 400 chars sys prompt + 40 chars message = 440 → 110 tokens
+      final msg = ChatMessage(role: 'user', content: 'a' * 40);
+      expect(
+        approxTokenCount([msg], systemPromptChars: 400),
+        110,
+      );
+    });
+
+    test('isUiOnly messages skipped even with systemPromptChars', () {
+      final ui = ChatMessage(
+        role: 'assistant',
+        content: 'x' * 40,
+        isUiOnly: true,
+      );
+      // Only system prompt chars should count (400 → 100 tokens).
+      expect(approxTokenCount([ui], systemPromptChars: 400), 100);
+    });
   });
 }

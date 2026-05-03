@@ -104,6 +104,7 @@ class MontyIdeController extends ChangeNotifier {
         'MontyIdeController must be initialized before execution.',
       );
     }
+    if (_isExecuting) return null;
 
     if (!silent && clear) clearConsole();
     _isExecuting = true;

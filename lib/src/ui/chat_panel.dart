@@ -63,22 +63,25 @@ class ChatMessage {
   }
 }
 
-/// Approximate token count across [messages] using the 1 token ≈ 4 chars
-/// heuristic (standard OpenAI approximation).
+/// Approximate token count using the 1 token ≈ 4 chars heuristic.
 ///
 /// Rules:
+/// - [systemPromptChars]: character count of the system prompt (sent every
+///   turn, dominant cost, not in [messages]).
 /// - `isUiOnly` messages are skipped — they are never sent to the LLM.
 /// - `content` is counted for all real messages (user, assistant, tool).
 /// - Tool-call invocations on assistant messages are counted via their
 ///   serialised id + name + arguments, since those occupy context too.
-int approxTokenCount(List<ChatMessage> messages) {
-  var chars = 0;
+int approxTokenCount(
+  List<ChatMessage> messages, {
+  int systemPromptChars = 0,
+}) {
+  var chars = systemPromptChars;
   for (final m in messages) {
     if (m.isUiOnly) continue;
     chars += m.content.length;
     for (final tc in m.toolCalls ?? const <LlmToolCall>[]) {
       chars += tc.id.length + tc.name.length;
-      // Serialise the arguments map to a string for a conservative estimate.
       for (final entry in tc.arguments.entries) {
         chars += entry.key.length + entry.value.toString().length;
       }
@@ -164,11 +167,16 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _showDebug = false;
 
   String get _approxTokens {
-    final tokens = approxTokenCount(widget.messages);
+    final tokens = approxTokenCount(
+      widget.messages,
+      systemPromptChars:
+          widget.assistant.systemPrompt.length +
+          widget.assistant.toolSchemaChars,
+    );
     if (tokens >= 1000) {
-      return '~${(tokens / 1000).toStringAsFixed(1)}k';
+      return '≈${(tokens / 1000).toStringAsFixed(1)}k tok';
     }
-    return '~$tokens';
+    return '≈$tokens tok';
   }
 
   @override
