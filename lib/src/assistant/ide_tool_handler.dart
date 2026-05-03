@@ -34,8 +34,11 @@ class IdeToolHandler implements AssistantToolHandler {
     );
     // Monty.typeCheck prepends prefixCode; subtract prefix line count so
     // reported lines match the user's script (not the combined file).
+    // Errors in the prefix itself are stub-generation bugs — suppress them.
     final prefixLines = '\n'.allMatches(prefix).length;
-    final errors = await Monty.typeCheck(code, prefixCode: prefix);
+    final allErrors = await Monty.typeCheck(code, prefixCode: prefix);
+    final errors =
+        allErrors.where((e) => (e.line ?? 0) > prefixLines).toList();
     if (errors.isEmpty) {
       return {'ok': true, 'errors': <Object?>[]};
     }
