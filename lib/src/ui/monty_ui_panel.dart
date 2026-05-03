@@ -46,6 +46,12 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
   Map<String, Object?>? _tree;
   void Function()? _unsubscribe;
 
+  // Collapse state for each sub-panel.
+  bool _mapCollapsed = false;
+  bool _chartCollapsed = false;
+  bool _svgCollapsed = false;
+  bool _elCollapsed = false;
+
   @override
   void initState() {
     super.initState();
@@ -100,21 +106,53 @@ class _MontyUiPanelState extends State<MontyUiPanel> {
           _buildHeader(context),
           const Divider(height: 1),
           if (widget.svgHostApi != null)
-            SvgPreviewPanel(hostApi: widget.svgHostApi!),
+            _CollapsibleSection(
+              title: 'SVG',
+              icon: Icons.image_outlined,
+              collapsed: _svgCollapsed,
+              onToggle: () =>
+                  setState(() => _svgCollapsed = !_svgCollapsed),
+              child: SvgPreviewPanel(hostApi: widget.svgHostApi!),
+            ),
           if (widget.mapHostApi != null)
-            SizedBox(
-              height: 300,
-              child: mapWidget(widget.mapHostApi!),
+            _CollapsibleSection(
+              title: 'Map',
+              icon: Icons.map_outlined,
+              collapsed: _mapCollapsed,
+              onToggle: () =>
+                  setState(() => _mapCollapsed = !_mapCollapsed),
+              child: SizedBox(
+                height: 300,
+                child: mapWidget(widget.mapHostApi!),
+              ),
             ),
           if (widget.chartHostApi != null)
-            FlChartPreviewWidget(hostApi: widget.chartHostApi!),
+            _CollapsibleSection(
+              title: 'Chart',
+              icon: Icons.bar_chart,
+              collapsed: _chartCollapsed,
+              onToggle: () =>
+                  setState(() => _chartCollapsed = !_chartCollapsed),
+              child: FlChartPreviewWidget(hostApi: widget.chartHostApi!),
+            ),
           Expanded(
-            child: _tree == null
-                ? const _EmptyState()
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: _MontyUiRenderer(node: _tree!, dispatch: _dispatch),
-                  ),
+            child: _CollapsibleSection(
+              title: 'Monty UI',
+              icon: Icons.widgets_outlined,
+              collapsed: _elCollapsed,
+              onToggle: () =>
+                  setState(() => _elCollapsed = !_elCollapsed),
+              expand: true,
+              child: _tree == null
+                  ? const _EmptyState()
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(12),
+                      child: _MontyUiRenderer(
+                        node: _tree!,
+                        dispatch: _dispatch,
+                      ),
+                    ),
+            ),
           ),
         ],
       ),
@@ -179,6 +217,88 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A thin collapsible section wrapper with a labelled header bar.
+///
+/// When [collapsed] is true the [child] is hidden and only the header
+/// is shown. [onToggle] is called on every tap so the parent can
+/// update state. Set [expand] to true so the wrapper fills remaining
+/// vertical space (used for the el_emit section inside an [Expanded]).
+class _CollapsibleSection extends StatelessWidget {
+  const _CollapsibleSection({
+    required this.title,
+    required this.icon,
+    required this.collapsed,
+    required this.onToggle,
+    required this.child,
+    this.expand = false,
+  });
+
+  final String title;
+  final IconData icon;
+  final bool collapsed;
+  final VoidCallback onToggle;
+  final Widget child;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurfaceVariant;
+    final header = InkWell(
+      onTap: onToggle,
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Row(
+          children: [
+            Icon(icon, size: 13, color: onSurface),
+            const SizedBox(width: 5),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: onSurface,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              collapsed
+                  ? Icons.keyboard_arrow_down
+                  : Icons.keyboard_arrow_up,
+              size: 16,
+              color: onSurface,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (collapsed) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          header,
+          Divider(height: 1, color: theme.dividerColor),
+        ],
+      );
+    }
+
+    final body = expand ? Expanded(child: child) : child;
+
+    return Column(
+      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        Divider(height: 1, color: theme.dividerColor),
+        body,
+      ],
     );
   }
 }

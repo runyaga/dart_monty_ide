@@ -326,6 +326,13 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
+  hhg_net:
+    dependency: "direct main"
+    description:
+      path: "../dart_monty_labs/packages/hhg_net"
+      relative: true
+    source: path
+    version: "0.0.1"
   hhg_svg:
     dependency: "direct main"
     description:

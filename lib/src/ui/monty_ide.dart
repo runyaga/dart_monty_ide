@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/assistant.dart';
@@ -9,6 +10,7 @@ import 'package:dart_monty_ide/src/bridge/widget_registry.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
 import 'package:dart_monty_ide/src/ui/assistant_buffer.dart';
 import 'package:dart_monty_ide/src/ui/chat_panel.dart';
+import 'package:dart_monty_ide/src/ui/duckdb_panel.dart';
 import 'package:dart_monty_ide/src/ui/externals_inspector.dart';
 import 'package:dart_monty_ide/src/ui/file_explorer.dart';
 import 'package:dart_monty_ide/src/ui/monty_console.dart';
@@ -99,12 +101,14 @@ class _MontyIdeState extends State<MontyIde> {
   bool _showExternals = false;
   bool _showFileExplorer = true;
   bool _showUiPanel = false;
+  bool _showDuckDb = false;
   bool _viewingAssistantBuffer = false;
 
   double _explorerWidth = 200;
   double _assistantWidth = 400;
   double _externalsWidth = 300;
   double _uiPanelWidth = 320;
+  double _duckDbWidth = 400;
 
   int _fileExplorerVersion = 0;
   // Bumped inside setState to mark the element dirty when reactive state
@@ -220,24 +224,43 @@ class _MontyIdeState extends State<MontyIde> {
             _assistantMessages.last.append(event.text);
           }
         } else if (event is ToolCallEvent) {
+          final args = event.arguments;
+          final code =
+              (args['code'] ?? args['content']) as String?;
+          final path = args['path'] as String?;
+          final target = args['target'] as String?;
+          String detail;
+          if (code != null && code.isNotEmpty) {
+            final preview =
+                code.length > 400 ? '${code.substring(0, 400)}\n...' : code;
+            detail = '\n```python\n$preview\n```';
+          } else if (path != null) {
+            detail = '\n`$path`';
+          } else if (target != null) {
+            detail = '\n`target: $target`';
+          } else {
+            detail = '';
+          }
           _assistantMessages.add(
             ChatMessage(
               role: 'assistant',
-              content: '🛠️ Calling tool: ${event.name}...',
+              content: '🛠️ **${event.name}**$detail',
               isUiOnly: true,
             ),
           );
-          if (event.name == 'run_python' || event.name == 'write_file') {
-            final code =
-                (event.arguments['code'] ?? event.arguments['content'])
-                    as String?;
-            if (code != null) _assistantCodeController.text = code;
+          if (code != null &&
+              (event.name == 'run_python' || event.name == 'write_file')) {
+            _assistantCodeController.text = code;
           }
         } else if (event is ToolResultEvent) {
+          final encoded = event.result is Map || event.result is List
+              ? jsonEncode(event.result)
+              : event.result?.toString() ?? '';
           _assistantMessages.add(
             ChatMessage(
               role: 'tool',
-              content: event.result?.toString() ?? '',
+              content: encoded,
+              toolCallId: event.name,
             ),
           );
           if (event.name == 'write_file') _fileExplorerVersion++;
@@ -363,6 +386,7 @@ class _MontyIdeState extends State<MontyIde> {
   bool _strictMode = false;
 
   void _handleRun() {
+    if (_controller.isExecuting) return;
     final code = _viewingAssistantBuffer
         ? _assistantCodeController.text
         : _editorController.text;
@@ -509,6 +533,24 @@ class _MontyIdeState extends State<MontyIde> {
                 _assistant.clearHistory();
                 setState(_assistantMessages.clear);
               },
+            ),
+          ),
+        ],
+        if (_showDuckDb) ...[
+          _HorizontalResizer(
+            onDrag: (delta) {
+              setState(() {
+                _duckDbWidth -= delta;
+                if (_duckDbWidth < 200) _duckDbWidth = 200;
+                if (_duckDbWidth > 700) _duckDbWidth = 700;
+              });
+            },
+          ),
+          SizedBox(
+            width: _duckDbWidth,
+            child: DuckDbPanel(
+              controller: _controller,
+              onClose: () => setState(() => _showDuckDb = false),
             ),
           ),
         ],
@@ -710,6 +752,16 @@ class _MontyIdeState extends State<MontyIde> {
               onPressed: () => setState(() => _showAssistant = !_showAssistant),
               icon: const Icon(Icons.chat, size: 20),
               tooltip: 'Assistant',
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _showDuckDb = !_showDuckDb),
+              icon: Icon(
+                Icons.storage,
+                color: _showDuckDb ? Colors.orange : null,
+                size: 20,
+              ),
+              tooltip: 'DuckDB',
             ),
             IconButton(
               visualDensity: VisualDensity.compact,

@@ -104,6 +104,7 @@ class MontyIdeController extends ChangeNotifier {
         'MontyIdeController must be initialized before execution.',
       );
     }
+    if (_isExecuting) return null;
 
     if (!silent && clear) clearConsole();
     _isExecuting = true;
@@ -305,13 +306,22 @@ class MontyIdeController extends ChangeNotifier {
         _extensions ?? const [],
         returnTypeOverrides: hhgReturnTypeOverrides,
       );
-      final errors = await Monty.typeCheck(code, prefixCode: prefix);
+      // Monty.typeCheck prepends prefixCode before the user's script, so
+      // error line numbers are relative to the combined file. Subtract the
+      // prefix line count so reported lines match the user's script.
+      // Errors whose line falls inside the prefix are stub-generation bugs —
+      // suppress them so the user never sees negative/zero line numbers.
+      final prefixLines = '\n'.allMatches(prefix).length;
+      final allErrors = await Monty.typeCheck(code, prefixCode: prefix);
+      final errors =
+          allErrors.where((e) => (e.line ?? 0) > prefixLines).toList();
       if (errors.isEmpty) {
         _outputController.add('✅ Analysis complete: No errors found.\n');
       } else {
         for (final e in errors) {
+          final userLine = (e.line ?? prefixLines) - prefixLines;
           _outputController.add(
-            '❌ [${e.code}] Line ${e.line}, Col ${e.column}: ${e.message}\n',
+            '❌ [${e.code}] Line $userLine, Col ${e.column}: ${e.message}\n',
           );
         }
         _outputController.add('--- Found ${errors.length} typing errors ---\n');

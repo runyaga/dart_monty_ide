@@ -32,7 +32,13 @@ class IdeToolHandler implements AssistantToolHandler {
       ideController.extensions ?? const [],
       returnTypeOverrides: MontyIdeController.hhgReturnTypeOverrides,
     );
-    final errors = await Monty.typeCheck(code, prefixCode: prefix);
+    // Monty.typeCheck prepends prefixCode; subtract prefix line count so
+    // reported lines match the user's script (not the combined file).
+    // Errors in the prefix itself are stub-generation bugs — suppress them.
+    final prefixLines = '\n'.allMatches(prefix).length;
+    final allErrors = await Monty.typeCheck(code, prefixCode: prefix);
+    final errors =
+        allErrors.where((e) => (e.line ?? 0) > prefixLines).toList();
     if (errors.isEmpty) {
       return {'ok': true, 'errors': <Object?>[]};
     }
@@ -42,7 +48,7 @@ class IdeToolHandler implements AssistantToolHandler {
       'errors': errors
           .map(
             (e) => <String, dynamic>{
-              'line': e.line,
+              'line': (e.line ?? prefixLines) - prefixLines,
               'col': e.column,
               'code': e.code,
               'message': e.message,
@@ -54,6 +60,7 @@ class IdeToolHandler implements AssistantToolHandler {
 
   @override
   Future<Map<String, dynamic>> runPython(String code) async {
+    if (!ideController.isInitialized) await ideController.initialize();
     // Clear and delimit in console so user knows which output is from
     // which tool call
     ideController.clearConsole();

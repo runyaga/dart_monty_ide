@@ -56,8 +56,30 @@ class _MontyConsoleState extends State<MontyConsole> {
     super.dispose();
   }
 
+  static Color _colorFor(String line) {
+    final t = line.trimLeft();
+    if (t.startsWith('🛑') || t.startsWith('❌')) return Colors.red[300]!;
+    if (t.startsWith('⚠️')) return Colors.orange[300]!;
+    if (t.startsWith('[') && RegExp(r'^\[[A-Za-z]+Error').hasMatch(t)) {
+      return Colors.red[300]!;
+    }
+    if (t.startsWith('Error:') || t.startsWith('error:')) return Colors.red[300]!;
+    if (t.contains('Traceback') || t.contains(' at line ')) {
+      return Colors.orange[300]!;
+    }
+    return Colors.greenAccent;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final spans = <TextSpan>[];
+    for (final line in _lines) {
+      spans.add(TextSpan(
+        text: line,
+        style: TextStyle(color: _colorFor(line)),
+      ));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -78,12 +100,11 @@ class _MontyConsoleState extends State<MontyConsole> {
             color: Colors.black,
             padding: const EdgeInsets.all(8),
             child: SingleChildScrollView(
-              child: SelectableText(
-                _lines.join(),
-                style: const TextStyle(
-                  color: Colors.greenAccent,
-                  fontFamily: 'monospace',
-                  fontSize: 12,
+              controller: _scrollController,
+              child: SelectableText.rich(
+                TextSpan(
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  children: spans,
                 ),
               ),
             ),

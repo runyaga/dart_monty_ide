@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dart_monty_ide/src/assistant/assistant_controller.dart';
 import 'package:dart_monty_ide/src/controller/monty_ide_controller.dart';
@@ -60,6 +61,33 @@ class ChatMessage {
   void dispose() {
     unawaited(_contentController.close());
   }
+}
+
+/// Approximate token count using the 1 token ≈ 4 chars heuristic.
+///
+/// Rules:
+/// - [systemPromptChars]: character count of the system prompt (sent every
+///   turn, dominant cost, not in [messages]).
+/// - `isUiOnly` messages are skipped — they are never sent to the LLM.
+/// - `content` is counted for all real messages (user, assistant, tool).
+/// - Tool-call invocations on assistant messages are counted via their
+///   serialised id + name + arguments, since those occupy context too.
+int approxTokenCount(
+  List<ChatMessage> messages, {
+  int systemPromptChars = 0,
+}) {
+  var chars = systemPromptChars;
+  for (final m in messages) {
+    if (m.isUiOnly) continue;
+    chars += m.content.length;
+    for (final tc in m.toolCalls ?? const <LlmToolCall>[]) {
+      chars += tc.id.length + tc.name.length;
+      for (final entry in tc.arguments.entries) {
+        chars += entry.key.length + entry.value.toString().length;
+      }
+    }
+  }
+  return (chars / 4).round();
 }
 
 /// A panel for interacting with an LLM with tool support.
@@ -138,6 +166,19 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _showSettings = false;
   bool _showDebug = false;
 
+  String get _approxTokens {
+    final tokens = approxTokenCount(
+      widget.messages,
+      systemPromptChars:
+          widget.assistant.systemPrompt.length +
+          widget.assistant.toolSchemaChars,
+    );
+    if (tokens >= 1000) {
+      return '≈${(tokens / 1000).toStringAsFixed(1)}k tok';
+    }
+    return '≈$tokens tok';
+  }
+
   @override
   void dispose() {
     _inputController.dispose();
@@ -172,6 +213,14 @@ class _ChatPanelState extends State<ChatPanel> {
                 const Text(
                   'ASSISTANT',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _approxTokens,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
@@ -394,6 +443,10 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget>
 
     final role = widget.message.role;
 
+    if (role == 'tool') {
+      return _ToolResultWidget(message: widget.message);
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -422,6 +475,160 @@ class _ChatMessageWidgetState extends State<_ChatMessageWidget>
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Compact, collapsible display for a `role='tool'` result message.
+///
+/// Shows: tool name + one-line summary by default; full JSON on expand.
+class _ToolResultWidget extends StatefulWidget {
+  const _ToolResultWidget({required this.message});
+  final ChatMessage message;
+
+  @override
+  State<_ToolResultWidget> createState() => _ToolResultWidgetState();
+}
+
+class _ToolResultWidgetState extends State<_ToolResultWidget> {
+  bool _expanded = false;
+
+  /// Parse content as JSON if possible, otherwise treat as plain string.
+  Object? get _parsed {
+    try {
+      return jsonDecode(widget.message.content);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// One-line summary from the parsed result map.
+  String _summary(Object? parsed) {
+    final name = widget.message.toolCallId ?? '?';
+    if (parsed is! Map<String, dynamic>) {
+      final raw = widget.message.content;
+      return raw.length > 80 ? '${raw.substring(0, 80)}…' : raw;
+    }
+    switch (name) {
+      case 'run_python':
+        final err = parsed['error'];
+        if (err != null && err != 'null') return '❌ $err';
+        final out = parsed['output'] as String? ?? '';
+        final lines = out.trim().split('\n');
+        final first = lines.first.trim();
+        return lines.length > 1
+            ? '$first  (+${lines.length - 1} lines)'
+            : first.isEmpty
+                ? '(no output)'
+                : first;
+      case 'type_check':
+        final ok = parsed['ok'] as bool? ?? false;
+        if (ok) return '✅ no type errors';
+        final n = (parsed['errors'] as List?)?.length ?? 0;
+        return '❌ $n error${n == 1 ? '' : 's'}';
+      case 'write_file':
+        return '✅ wrote ${parsed['path'] ?? ''}';
+      case 'read_file':
+        final content = parsed['content'] as String? ?? '';
+        return '📄 ${content.length} chars';
+      case 'list_files':
+        final files = parsed['files'] as List?;
+        return '📁 ${files?.length ?? 0} files';
+      case 'ui_state':
+        final awaiting = parsed['awaiting'] as bool? ?? false;
+        return awaiting ? '🖥️ UI awaiting event' : '🖥️ UI idle';
+      case 'ui_dispatch':
+        final evt = parsed['event'] as Map?;
+        return '📡 dispatched ${evt?['type'] ?? ''}';
+      default:
+        final status = parsed['status'];
+        return status != null ? '$status' : '✅ ok';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final name = widget.message.toolCallId ?? 'tool';
+    final parsed = _parsed;
+    final summary = _summary(parsed);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined,
+                        size: 12,
+                        color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 5),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        summary,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 14,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_expanded)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 240),
+                color: Colors.black,
+                padding: const EdgeInsets.all(8),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    // Pretty-print JSON when available.
+                    parsed != null
+                        ? const JsonEncoder.withIndent('  ').convert(parsed)
+                        : widget.message.content,
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

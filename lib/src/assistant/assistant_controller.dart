@@ -84,6 +84,19 @@ class AssistantController {
   String get systemPrompt =>
       _systemPromptBuilder?.call() ?? _staticSystemPrompt!;
 
+  /// Character count of the serialised tool schemas sent on every API call.
+  int get toolSchemaChars => jsonEncode(
+    _tools
+        .map(
+          (t) => {
+            'name': t.name,
+            'description': t.description,
+            'parameters': t.parameters,
+          },
+        )
+        .toList(),
+  ).length;
+
   final List<Map<String, dynamic>> _history = [];
   int _turnCount = 0;
   bool _isStopped = false;
