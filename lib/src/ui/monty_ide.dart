@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_ide/assistant.dart';
@@ -220,24 +221,43 @@ class _MontyIdeState extends State<MontyIde> {
             _assistantMessages.last.append(event.text);
           }
         } else if (event is ToolCallEvent) {
+          final args = event.arguments;
+          final code =
+              (args['code'] ?? args['content']) as String?;
+          final path = args['path'] as String?;
+          final target = args['target'] as String?;
+          String detail;
+          if (code != null && code.isNotEmpty) {
+            final preview =
+                code.length > 400 ? '${code.substring(0, 400)}\n...' : code;
+            detail = '\n```python\n$preview\n```';
+          } else if (path != null) {
+            detail = '\n`$path`';
+          } else if (target != null) {
+            detail = '\n`target: $target`';
+          } else {
+            detail = '';
+          }
           _assistantMessages.add(
             ChatMessage(
               role: 'assistant',
-              content: '🛠️ Calling tool: ${event.name}...',
+              content: '🛠️ **${event.name}**$detail',
               isUiOnly: true,
             ),
           );
-          if (event.name == 'run_python' || event.name == 'write_file') {
-            final code =
-                (event.arguments['code'] ?? event.arguments['content'])
-                    as String?;
-            if (code != null) _assistantCodeController.text = code;
+          if (code != null &&
+              (event.name == 'run_python' || event.name == 'write_file')) {
+            _assistantCodeController.text = code;
           }
         } else if (event is ToolResultEvent) {
+          final encoded = event.result is Map || event.result is List
+              ? jsonEncode(event.result)
+              : event.result?.toString() ?? '';
           _assistantMessages.add(
             ChatMessage(
               role: 'tool',
-              content: event.result?.toString() ?? '',
+              content: encoded,
+              toolCallId: event.name,
             ),
           );
           if (event.name == 'write_file') _fileExplorerVersion++;
