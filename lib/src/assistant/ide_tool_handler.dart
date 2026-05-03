@@ -45,7 +45,7 @@ class IdeToolHandler implements AssistantToolHandler {
       'errors': errors
           .map(
             (e) => <String, dynamic>{
-              'line': e.line - prefixLines,
+              'line': (e.line ?? prefixLines) - prefixLines,
               'col': e.column,
               'code': e.code,
               'message': e.message,

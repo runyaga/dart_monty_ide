@@ -314,7 +314,7 @@ class MontyIdeController extends ChangeNotifier {
         _outputController.add('✅ Analysis complete: No errors found.\n');
       } else {
         for (final e in errors) {
-          final userLine = e.line - prefixLines;
+          final userLine = (e.line ?? prefixLines) - prefixLines;
           _outputController.add(
             '❌ [${e.code}] Line $userLine, Col ${e.column}: ${e.message}\n',
           );
