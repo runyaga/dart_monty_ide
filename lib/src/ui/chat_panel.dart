@@ -62,6 +62,30 @@ class ChatMessage {
   }
 }
 
+/// Approximate token count across [messages] using the 1 token ≈ 4 chars
+/// heuristic (standard OpenAI approximation).
+///
+/// Rules:
+/// - `isUiOnly` messages are skipped — they are never sent to the LLM.
+/// - `content` is counted for all real messages (user, assistant, tool).
+/// - Tool-call invocations on assistant messages are counted via their
+///   serialised id + name + arguments, since those occupy context too.
+int approxTokenCount(List<ChatMessage> messages) {
+  var chars = 0;
+  for (final m in messages) {
+    if (m.isUiOnly) continue;
+    chars += m.content.length;
+    for (final tc in m.toolCalls ?? const <LlmToolCall>[]) {
+      chars += tc.id.length + tc.name.length;
+      // Serialise the arguments map to a string for a conservative estimate.
+      for (final entry in tc.arguments.entries) {
+        chars += entry.key.length + entry.value.toString().length;
+      }
+    }
+  }
+  return (chars / 4).round();
+}
+
 /// A panel for interacting with an LLM with tool support.
 class ChatPanel extends StatefulWidget {
   /// Creates a [ChatPanel].
@@ -138,18 +162,12 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _showSettings = false;
   bool _showDebug = false;
 
-  /// Approximate token count — 1 token ≈ 4 chars (OpenAI heuristic).
-  /// Includes all roles (user, assistant, tool) since they all consume context.
   String get _approxTokens {
-    final chars = widget.messages.fold<int>(
-      0,
-      (sum, m) => sum + m.content.length,
-    );
-    final tokens = (chars / 4).round();
+    final tokens = approxTokenCount(widget.messages);
     if (tokens >= 1000) {
-      return '~${(tokens / 1000).toStringAsFixed(1)}k tk';
+      return '~${(tokens / 1000).toStringAsFixed(1)}k';
     }
-    return '~$tokens tk';
+    return '~$tokens';
   }
 
   @override
