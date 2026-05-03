@@ -1846,8 +1846,13 @@ const _reportWeatherScript = r'''
 requires(["duck_query", "duck_query_records", "chart_bar", "chart_line",
           "map_add_marker", "map_clear_markers", "map_fit_bounds_to_markers"])
 
-count = duck_query("SELECT COUNT(*) AS n FROM city_weather")
-n = count["n"][0]
+try:
+    count = duck_query("SELECT COUNT(*) AS n FROM city_weather")
+    n = count["n"][0]
+except Exception:
+    print("No data — run 20_load_weather.py first.")
+    n = 0
+
 if n == 0:
     print("No data — run 20_load_weather.py first.")
 else:
@@ -1895,8 +1900,13 @@ const _reportAirportsScript = r'''
 requires(["duck_query", "duck_query_records", "chart_bar",
           "map_fly_to", "map_add_marker", "map_clear_markers", "map_fit_bounds_to_markers"])
 
-count = duck_query("SELECT COUNT(*) AS n FROM airport_metar")
-n = count["n"][0]
+try:
+    count = duck_query("SELECT COUNT(*) AS n FROM airport_metar")
+    n = count["n"][0]
+except Exception:
+    print("No data — run 21_load_airports.py first.")
+    n = 0
+
 if n == 0:
     print("No data — run 21_load_airports.py first.")
 else:
