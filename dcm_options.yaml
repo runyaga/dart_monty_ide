@@ -23,9 +23,13 @@ dcm:
       - "test/**"
 
   rules:
+    # --- Bug Prevention ---
     - avoid-throw-in-finally-block
     - avoid-missing-completer-stack-trace
-    - avoid-uncaught-future-errors
+    - avoid-uncaught-future-errors:
+        exclude:
+          # unawaited() calls in UI event handlers are intentional fire-and-forget
+          - "lib/src/ui/**"
     - avoid-recursive-calls
     - avoid-contradictory-expressions
     - avoid-self-assignment
@@ -39,18 +43,6 @@ dcm:
     - avoid-shadowing
     - avoid-only-rethrow
     - avoid-identical-exception-handling-blocks
-    - prefer-early-return
-    - prefer-returning-condition
-    - avoid-throw-objects-without-tostring
-    - avoid-non-final-exception-class-fields
-    - prefer-correct-error-name
-    - avoid-unnecessary-local-variable
-    - avoid-unnecessary-reassignment
-    - avoid-mutating-parameters
-    - avoid-unused-local-variable
-    - avoid-nested-try-statements
-    - avoid-missing-interpolation
-    - prefer-correct-identifier-length
     - avoid-unsafe-reduce
     - avoid-map-keys-contains
     - prefer-contains
@@ -61,16 +53,33 @@ dcm:
     - no-equal-switch-case
     - no-equal-switch-expression-cases
     - no-equal-nested-conditions
-    - avoid-unused-parameters
-    - avoid-nested-conditional-expressions
+    - avoid-collection-methods-with-unrelated-types
     - avoid-missing-enum-constant-in-map
+    - avoid-duplicate-exports
+
+    # --- Code Quality ---
+    - prefer-early-return
+    - prefer-returning-condition
+    - avoid-throw-objects-without-tostring
+    - avoid-non-final-exception-class-fields
+    - prefer-correct-error-name
+    - avoid-unnecessary-local-variable
+    - avoid-unnecessary-reassignment
+    - avoid-mutating-parameters
+    - avoid-unused-local-variable
+    - avoid-unused-parameters
+    - avoid-nested-try-statements
+    - avoid-missing-interpolation
+    - prefer-correct-identifier-length
+    - avoid-nested-conditional-expressions
     - avoid-unnecessary-type-assertions
     - avoid-unnecessary-type-casts
     - avoid-unrelated-type-assertions
     - avoid-redundant-async
-    - avoid-duplicate-exports
-    - avoid-collection-methods-with-unrelated-types
     - avoid-passing-async-when-sync-expected
+    - avoid-unnecessary-overrides
+
+    # --- Style & Formatting ---
     - prefer-immediate-return
     - prefer-commenting-analyzer-ignores
     - prefer-conditional-expressions
@@ -78,7 +87,10 @@ dcm:
     - prefer-moving-to-variable
     - newline-before-return
     - no-boolean-literal-compare
-    - no-empty-block
+    - no-empty-block:
+        exclude:
+          # Default no-op lifecycle method overrides in extensions
+          - "lib/src/bridge/**"
     - no-equal-then-else
     - prefer-first
     - prefer-last
@@ -86,10 +98,11 @@ dcm:
     - double-literal-format
     - prefer-switch-expression
     - avoid-unnecessary-parentheses
-    - prefer-async-await
     - avoid-adjacent-strings
     - format-comment
     - prefer-final-fields
+
+    # --- Async & Type Safety ---
     - avoid-nested-futures
     - avoid-nested-streams-and-futures
     - avoid-type-casts
@@ -98,5 +111,60 @@ dcm:
     - prefer-correct-future-return-type
     - avoid-future-tostring
     - avoid-nullable-tostring
+    - prefer-async-await
+
+    # --- Immutability & State ---
     - dispose-class-fields
     - avoid-global-state
+    - prefer-final-fields
+
+    # --- Null Safety & Types ---
+    - avoid-late-keyword:
+        exclude:
+          - "test/**"
+          # State fields initialized in initState() — standard Flutter pattern
+          - "lib/src/ui/**"
+    - avoid-dynamic:
+        exclude:
+          - "test/**"
+          # JSON deserialization and extension API boundaries use Map<String, dynamic>
+          - "lib/main.dart"
+          - "lib/src/assistant/**"
+          - "lib/src/bridge/**"
+    - avoid-non-null-assertion:
+        exclude:
+          - "test/**"
+          # BuildContext bang after mounted checks
+          - "lib/src/ui/**"
+
+    # --- Class Design ---
+    - avoid-accessing-other-classes-private-members
+    - avoid-default-tostring
+    - prefer-abstract-final-static-class
+    - avoid-suspicious-super-overrides
+    - avoid-unnecessary-constructor
+    - avoid-shadowed-extension-methods
+    - avoid-duplicate-mixins
+    - avoid-declaring-call-method
+
+    # --- Member Ordering ---
+    - member-ordering:
+        order:
+          - constructors
+          - public-fields
+          - private-fields
+          - get-setters
+          - public-methods
+          - private-methods
+          - overridden-methods
+
+    # --- Robustness ---
+    - avoid-unsafe-collection-methods:
+        exclude:
+          # UI state lists accessed within length-checked loops
+          - "lib/src/ui/**"
+          - "lib/src/controller/**"
+
+    # --- Testing ---
+    - prefer-test-matcher
+    - prefer-correct-test-file-name
