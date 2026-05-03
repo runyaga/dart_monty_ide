@@ -25,6 +25,7 @@ import 'package:hhg_flchart_flutter/hhg_flchart_flutter.dart';
 import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_map/hhg_map.dart';
 import 'package:hhg_map_flutter/hhg_map_flutter.dart';
+import 'package:hhg_net/hhg_net.dart';
 import 'package:hhg_svg/hhg_svg.dart';
 import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -110,6 +111,7 @@ void main() async {
     final mapExt = MapExtension(hostApi: mapHostApi);
     final geoExt = GeoEngineExtension();
     final chartExt = FlChartExtension(hostApi: chartHostApi);
+    final netExt = NetExtension();
     final exts = <MontyExtension>[
       flutterExt,
       eventLoopExt,
@@ -121,6 +123,7 @@ void main() async {
       mapExt,
       geoExt,
       chartExt,
+      netExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
       basePrompt: defaultAssistantPrompt,
@@ -589,6 +592,18 @@ print(f"Final score: {score} / {asked}")
     _hhgDuckdbInspectorScript,
   );
   await vfs.writeFile('examples/17_hhg_charts.py', _hhgChartsScript);
+  await vfs.writeFile('examples/18_remote_weather.py', _remoteWeatherScript);
+  await vfs.writeFile(
+    'examples/19_remote_earthquakes.py',
+    _remoteEarthquakesScript,
+  );
+  await vfs.writeFile('examples/20_load_weather.py', _loadWeatherScript);
+  await vfs.writeFile('examples/21_load_airports.py', _loadAirportsScript);
+  await vfs.writeFile('examples/22_report_weather.py', _reportWeatherScript);
+  await vfs.writeFile(
+    'examples/23_report_airports.py',
+    _reportAirportsScript,
+  );
 
   final files = await vfs.listFiles();
   var shouldUpdate = !files.contains('system_prompt.txt');
@@ -1370,6 +1385,223 @@ while True:
 print("DuckDB inspector closed.")
 ''';
 
+const _remoteWeatherScript = r'''
+# HHG: load live weather from Open-Meteo into DuckDB.
+#
+# Fetches current conditions for 5 global cities in one batch API call,
+# inserts into DuckDB, then queries for comparisons.
+#
+# Works on both FFI (native macOS) and WASM (Flutter web) — Open-Meteo
+# has permissive CORS headers so no proxy is needed in the browser.
+#
+# https://open-meteo.com/en/docs  (free, no API key)
+requires(["net_http_get_json", "duck_execute", "duck_query_records"])
+
+cities = [
+    ("New York",    40.7128,  -74.0060),
+    ("London",      51.5074,   -0.1278),
+    ("Tokyo",       35.6762,  139.6503),
+    ("Sydney",     -33.8688,  151.2093),
+    ("Sao Paulo",  -23.5505,  -46.6333),
+]
+
+lats = ",".join(str(lat) for _, lat, _ in cities)
+lngs = ",".join(str(lng) for _, _, lng in cities)
+url = (
+    "https://api.open-meteo.com/v1/forecast"
+    f"?latitude={lats}&longitude={lngs}"
+    "&current=temperature_2m,wind_speed_10m,precipitation,weather_code"
+    "&wind_speed_unit=ms"
+    "&timezone=auto"
+)
+
+print("Fetching weather from Open-Meteo …")
+data = net_http_get_json(url)
+
+# Batch requests return a JSON list; single-location returns a dict.
+if not isinstance(data, list):
+    data = [data]
+print(f"Got {len(data)} city responses")
+
+# ----- Create table -----
+duck_execute("""
+CREATE OR REPLACE TABLE city_weather (
+    city        VARCHAR,
+    temp_c      DOUBLE,
+    temp_f      DOUBLE,
+    wind_ms     DOUBLE,
+    precip_mm   DOUBLE,
+    wmo_code    INTEGER
+)
+""")
+
+def esc(s):
+    return str(s).replace("'", "''")
+
+for i, entry in enumerate(data):
+    name = cities[i][0]
+    cur  = entry.get("current") or {}
+    t    = cur.get("temperature_2m") or 0.0
+    w    = cur.get("wind_speed_10m") or 0.0
+    p    = cur.get("precipitation") or 0.0
+    code = cur.get("weather_code") or 0
+    tf   = round(t * 9 / 5 + 32, 1)
+    duck_execute(
+        f"INSERT INTO city_weather VALUES "
+        f"('{esc(name)}', {t}, {tf}, {w}, {p}, {code})"
+    )
+
+# ----- Analysis -----
+rows = duck_query_records("""
+SELECT
+    city,
+    temp_c,
+    temp_f,
+    wind_ms,
+    precip_mm,
+    CASE
+        WHEN wmo_code = 0              THEN 'Clear'
+        WHEN wmo_code BETWEEN 1 AND 3  THEN 'Partly cloudy'
+        WHEN wmo_code BETWEEN 45 AND 48 THEN 'Fog'
+        WHEN wmo_code BETWEEN 51 AND 67 THEN 'Rain/drizzle'
+        WHEN wmo_code BETWEEN 71 AND 77 THEN 'Snow'
+        WHEN wmo_code BETWEEN 80 AND 82 THEN 'Rain showers'
+        WHEN wmo_code BETWEEN 95 AND 99 THEN 'Thunderstorm'
+        ELSE 'Other (' || wmo_code || ')'
+    END AS conditions
+FROM city_weather
+ORDER BY temp_c DESC
+""")
+
+print(f"\n{'City':<12}  {'°C':>5}  {'°F':>6}  {'m/s':>5}  Conditions")
+print("-" * 55)
+for r in rows:
+    print(
+        f"{r['city']:<12}  {r['temp_c']:>5.1f}  "
+        f"{r['temp_f']:>6.1f}  {r['wind_ms']:>5.1f}  {r['conditions']}"
+    )
+
+# Return the table for the IDE console.
+duck_query_records("SELECT * FROM city_weather ORDER BY temp_c DESC")
+''';
+
+const _remoteEarthquakesScript = r'''
+# HHG: load USGS earthquake feed into DuckDB for SQL analysis.
+#
+# Fetches the last 24 h of earthquakes worldwide as GeoJSON, inserts
+# into DuckDB, then runs several queries:  magnitude distribution,
+# depth vs magnitude correlation, top-5 strongest events.
+#
+# Works on both FFI (native) and WASM (Flutter web) — the USGS feed
+# has open CORS headers. Up to 500 events are loaded (the feed
+# typically has 200-400 per day).
+#
+# https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
+requires(["net_http_get_json", "duck_execute", "duck_query_records"])
+
+URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+
+print("Fetching USGS earthquake feed …")
+data = net_http_get_json(URL)
+features = data.get("features") or []
+print(f"Feed contains {len(features)} events")
+
+# Limit to first 500 so the insert stays snappy on WASM.
+features = features[:500]
+
+duck_execute("""
+CREATE OR REPLACE TABLE earthquakes (
+    id      VARCHAR,
+    place   VARCHAR,
+    mag     DOUBLE,
+    depth   DOUBLE,
+    lat     DOUBLE,
+    lng     DOUBLE,
+    time_ms BIGINT
+)
+""")
+
+def esc(s):
+    return str(s).replace("'", "''")
+
+values = []
+for f in features:
+    props = f.get("properties") or {}
+    coords = (f.get("geometry") or {}).get("coordinates") or [0, 0, 0]
+    values.append(
+        f"('{esc(f.get('id',''))}', "
+        f"'{esc(props.get('place','Unknown'))}', "
+        f"{props.get('mag') or 0.0}, "
+        f"{coords[2]}, "
+        f"{coords[1]}, "
+        f"{coords[0]}, "
+        f"{props.get('time') or 0})"
+    )
+
+if values:
+    duck_execute("INSERT INTO earthquakes VALUES " + ", ".join(values))
+
+n_loaded = duck_query_records("SELECT count(*) AS n FROM earthquakes")[0]["n"]
+print(f"Loaded {n_loaded} earthquakes into DuckDB\n")
+
+# ----- Magnitude distribution -----
+buckets = duck_query_records("""
+SELECT
+    CASE
+        WHEN mag < 2   THEN '< 2.0  micro'
+        WHEN mag < 3   THEN '2–3    minor'
+        WHEN mag < 4   THEN '3–4    light'
+        WHEN mag < 5   THEN '4–5    moderate'
+        ELSE               '5+     strong'
+    END AS category,
+    count(*)          AS n,
+    round(avg(mag),2) AS avg_mag,
+    round(max(mag),1) AS max_mag
+FROM earthquakes
+GROUP BY category
+ORDER BY max_mag
+""")
+
+print("Magnitude distribution:")
+for r in buckets:
+    bar = "#" * int(r["n"] / 5 + 0.5)
+    print(f"  {r['category']:<20}  n={r['n']:>4}  avg={r['avg_mag']}  max={r['max_mag']}  {bar}")
+
+# ----- Depth buckets -----
+depths = duck_query_records("""
+SELECT
+    CASE
+        WHEN depth <  70 THEN 'shallow (< 70 km)'
+        WHEN depth < 300 THEN 'intermediate (70–300 km)'
+        ELSE                  'deep (> 300 km)'
+    END AS depth_class,
+    count(*)          AS n,
+    round(avg(mag),2) AS avg_mag
+FROM earthquakes
+GROUP BY depth_class
+ORDER BY avg_mag
+""")
+
+print("\nDepth class vs average magnitude:")
+for r in depths:
+    print(f"  {r['depth_class']:<26}  n={r['n']:>4}  avg_mag={r['avg_mag']}")
+
+# ----- Top 5 -----
+top5 = duck_query_records("""
+SELECT place, mag, depth
+FROM earthquakes
+ORDER BY mag DESC
+LIMIT 5
+""")
+
+print("\nTop 5 strongest:")
+for r in top5:
+    print(f"  M{r['mag']:4.1f}  depth {r['depth']:>6.1f} km  {r['place']}")
+
+# Return top events for the IDE console.
+top5
+''';
+
 const _hhgChartsScript = '''
 # HHG: interactive fl_chart demo — bar, line, pie, scatter, radar.
 # Open the Monty UI panel (toolbar "smart_display" icon) before running.
@@ -1437,4 +1669,274 @@ chart_radar(
     color="#FF9800",
 )
 print("Radar chart rendered. Done.")
+''';
+
+// ── Load scripts ─────────────────────────────────────────────────────────────
+
+const _loadWeatherScript = r'''
+# HHG: Load current weather + 7-day daily forecast for 10 cities into DuckDB.
+# Tables: city_weather (current), city_forecast (daily).
+# Run once per session; data persists until Reset Interpreter.
+# Then run 22_report_weather.py to visualize.
+requires(["net_http_get_json", "duck_execute", "duck_query"])
+
+cities = [
+    ("New York",     40.7128,  -74.0060),
+    ("London",       51.5074,   -0.1278),
+    ("Tokyo",        35.6762,  139.6503),
+    ("Sydney",      -33.8688,  151.2093),
+    ("Paris",        48.8566,    2.3522),
+    ("Dubai",        25.2048,   55.2708),
+    ("Singapore",     1.3521,  103.8198),
+    ("Chicago",      41.8781,  -87.6298),
+    ("Houston",      29.7604,  -95.3698),
+    ("Los Angeles",  34.0522, -118.2437),
+]
+
+lats = ",".join(str(c[1]) for c in cities)
+lngs = ",".join(str(c[2]) for c in cities)
+url = (
+    "https://api.open-meteo.com/v1/forecast"
+    f"?latitude={lats}&longitude={lngs}"
+    "&current_weather=true"
+    "&daily=temperature_2m_max,temperature_2m_min,wind_speed_10m_max"
+    "&timezone=UTC&forecast_days=7"
+)
+
+print("Fetching weather from Open-Meteo …")
+raw = net_http_get_json(url)
+items = raw if isinstance(raw, list) else [raw]
+
+duck_execute("DROP TABLE IF EXISTS city_weather")
+duck_execute("""
+    CREATE TABLE city_weather (
+        city      TEXT,
+        lat       DOUBLE,
+        lng       DOUBLE,
+        temp_c    DOUBLE,
+        wind_kph  DOUBLE,
+        wind_dir  INT,
+        wmo_code  INT
+    )
+""")
+
+cur_rows = []
+for i, info in enumerate(cities):
+    name, lat, lng = info
+    if i >= len(items):
+        continue
+    cw = items[i].get("current_weather") or {}
+    t = float(cw.get("temperature") or 0)
+    w = float(cw.get("windspeed") or 0)
+    wd = int(cw.get("winddirection") or 0)
+    code = int(cw.get("weathercode") or 0)
+    n = name.replace("'", "''")
+    cur_rows.append(f"('{n}', {lat}, {lng}, {t}, {w}, {wd}, {code})")
+
+if cur_rows:
+    duck_execute(f"INSERT INTO city_weather VALUES {', '.join(cur_rows)}")
+
+duck_execute("DROP TABLE IF EXISTS city_forecast")
+duck_execute("""
+    CREATE TABLE city_forecast (
+        city         TEXT,
+        date         TEXT,
+        max_temp_c   DOUBLE,
+        min_temp_c   DOUBLE,
+        wind_max_kph DOUBLE
+    )
+""")
+
+fc_rows = []
+for i, info in enumerate(cities):
+    name, lat, lng = info
+    if i >= len(items):
+        continue
+    daily = items[i].get("daily") or {}
+    dates = daily.get("time") or []
+    max_t = daily.get("temperature_2m_max") or []
+    min_t = daily.get("temperature_2m_min") or []
+    wind_max = daily.get("wind_speed_10m_max") or []
+    n = name.replace("'", "''")
+    for j, d in enumerate(dates):
+        mx = float(max_t[j]) if j < len(max_t) else 0.0
+        mn = float(min_t[j]) if j < len(min_t) else 0.0
+        wm = float(wind_max[j]) if j < len(wind_max) else 0.0
+        fc_rows.append(f"('{n}', '{d}', {mx}, {mn}, {wm})")
+
+if fc_rows:
+    duck_execute(f"INSERT INTO city_forecast VALUES {', '.join(fc_rows)}")
+
+cw_count = duck_query("SELECT COUNT(*) AS n FROM city_weather")
+fc_count = duck_query("SELECT COUNT(*) AS n FROM city_forecast")
+print(f"city_weather: {cw_count['n'][0]} rows")
+print(f"city_forecast: {fc_count['n'][0]} rows (7-day daily × 10 cities)")
+print("Done. Run 22_report_weather.py to visualize.")
+''';
+
+const _loadAirportsScript = r'''
+# HHG: Load METAR weather for major US airports into DuckDB.
+# Table: airport_metar (ident, lat, lng, temp_c, dewpoint_c,
+#   wind_dir, wind_speed_kt, visibility_sm, flight_category, raw_metar).
+# Uses aviationweather.gov public JSON API.
+# Then run 23_report_airports.py to visualize.
+requires(["net_http_get_json", "duck_execute", "duck_query"])
+
+AIRPORTS = ",".join([
+    "KJFK", "KLAX", "KORD", "KDFW", "KATL",
+    "KSFO", "KDEN", "KPHX", "KLAS", "KSEA",
+    "KMIA", "KBOS", "KEWR", "KIAH", "KDTW",
+    "KMSP", "KPHL", "KSTL", "KCLT", "KSLC",
+])
+
+url = f"https://aviationweather.gov/api/data/metar?ids={AIRPORTS}&format=json&hours=2"
+print("Fetching METARs from aviationweather.gov …")
+data = net_http_get_json(url)
+
+duck_execute("DROP TABLE IF EXISTS airport_metar")
+duck_execute("""
+    CREATE TABLE airport_metar (
+        ident           TEXT,
+        lat             DOUBLE,
+        lng             DOUBLE,
+        temp_c          DOUBLE,
+        dewpoint_c      DOUBLE,
+        wind_dir        INT,
+        wind_speed_kt   INT,
+        visibility_sm   DOUBLE,
+        flight_category TEXT,
+        raw_metar       TEXT
+    )
+""")
+
+rows = []
+seen = []
+for obs in data:
+    ident = obs.get("icaoId") or obs.get("stationId") or ""
+    if not ident or ident in seen:
+        continue
+    seen.append(ident)
+    lat = float(obs.get("lat") or 0)
+    lng = float(obs.get("lon") or 0)
+    temp = float(obs.get("temp") or 0)
+    dew = float(obs.get("dewp") or 0)
+    wdir = int(obs.get("wdir") or 0)
+    wspd = int(obs.get("wspd") or 0)
+    visib = float(obs.get("visib") or 10)
+    cat = (obs.get("fltcat") or obs.get("flightCategory") or "VFR").replace("'", "''")
+    raw = (obs.get("rawOb") or "").replace("'", "''")[:200]
+    rows.append(
+        f"('{ident}', {lat}, {lng}, {temp}, {dew}, {wdir}, {wspd}, {visib}, '{cat}', '{raw}')"
+    )
+
+if rows:
+    duck_execute(f"INSERT INTO airport_metar VALUES {', '.join(rows)}")
+
+count = duck_query("SELECT COUNT(*) AS n FROM airport_metar")
+print(f"airport_metar: {count['n'][0]} rows")
+print("Done. Run 23_report_airports.py to visualize.")
+''';
+
+// ── Report scripts ────────────────────────────────────────────────────────────
+
+const _reportWeatherScript = r'''
+# HHG: Visualize city_weather + city_forecast from DuckDB.
+# Shows: temp bar chart, 7-day forecast line chart, temperature map.
+# Run 20_load_weather.py first to populate the tables.
+requires(["duck_query", "duck_query_records", "chart_bar", "chart_line",
+          "map_add_marker", "map_clear_markers", "map_fit_bounds_to_markers"])
+
+count = duck_query("SELECT COUNT(*) AS n FROM city_weather")
+n = count["n"][0]
+if n == 0:
+    print("No data — run 20_load_weather.py first.")
+else:
+    cur = duck_query("SELECT city, temp_c, wind_kph FROM city_weather ORDER BY temp_c DESC")
+    chart_bar(
+        cur["city"], cur["temp_c"],
+        title="Current Temperature by City",
+        xlabel="City", ylabel="°C", color="#E53935",
+    )
+
+    cities_q = duck_query_records("SELECT DISTINCT city FROM city_forecast ORDER BY city")
+    series = []
+    for row in cities_q:
+        city = row["city"]
+        fc = duck_query(
+            f"SELECT date, max_temp_c FROM city_forecast WHERE city = '{city}' ORDER BY date"
+        )
+        series.append({"x": fc["date"], "y": fc["max_temp_c"], "label": city})
+    chart_line(
+        x=[], y=[],
+        title="7-Day Max Temperature Forecast (°C)",
+        xlabel="Date", ylabel="°C", color="",
+        series=series,
+    )
+
+    map_clear_markers()
+    locs = duck_query_records("SELECT city, lat, lng, temp_c FROM city_weather")
+    for r in locs:
+        t = r["temp_c"]
+        color = "red" if t > 28 else ("orange" if t > 15 else ("blue" if t < 5 else "green"))
+        map_add_marker(
+            r["lat"], r["lng"],
+            label=f"{r['city']} {t}°C",
+            color=color, icon="thermostat",
+        )
+    map_fit_bounds_to_markers(60)
+
+    print(f"Visualized {n} cities. Hottest: {cur['city'][0]} at {cur['temp_c'][0]}°C.")
+''';
+
+const _reportAirportsScript = r'''
+# HHG: Visualize airport_metar from DuckDB — map + wind/category charts.
+# VFR=green, MVFR=blue, IFR=red, LIFR=purple.
+# Run 21_load_airports.py first.
+requires(["duck_query", "duck_query_records", "chart_bar",
+          "map_fly_to", "map_add_marker", "map_clear_markers", "map_fit_bounds_to_markers"])
+
+count = duck_query("SELECT COUNT(*) AS n FROM airport_metar")
+n = count["n"][0]
+if n == 0:
+    print("No data — run 21_load_airports.py first.")
+else:
+    cats = duck_query("""
+        SELECT flight_category AS cat, COUNT(*) AS cnt
+        FROM airport_metar GROUP BY flight_category ORDER BY cnt DESC
+    """)
+    chart_bar(
+        cats["cat"], cats["cnt"],
+        title="Airports by Flight Category",
+        xlabel="Category", ylabel="Count", color="#1976D2",
+    )
+
+    wind = duck_query(
+        "SELECT ident, wind_speed_kt FROM airport_metar ORDER BY wind_speed_kt DESC"
+    )
+    chart_bar(
+        wind["ident"], wind["wind_speed_kt"],
+        title="Wind Speed by Airport",
+        xlabel="Airport", ylabel="Knots", color="#039BE5",
+    )
+
+    map_fly_to(39.5, -98.35, zoom=4, animated=True)
+    map_clear_markers()
+    airports = duck_query_records(
+        "SELECT ident, lat, lng, temp_c, wind_speed_kt, flight_category FROM airport_metar"
+    )
+    for ap in airports:
+        cat = ap["flight_category"]
+        color = (
+            "green" if cat == "VFR" else
+            "blue" if cat == "MVFR" else
+            "red" if cat == "IFR" else
+            "purple"
+        )
+        map_add_marker(
+            ap["lat"], ap["lng"],
+            label=f"{ap['ident']} {cat} {ap['temp_c']}°C {ap['wind_speed_kt']}kt",
+            color=color, icon="flight",
+        )
+    map_fit_bounds_to_markers(40)
+    print(f"Mapped {n} airports.")
 ''';

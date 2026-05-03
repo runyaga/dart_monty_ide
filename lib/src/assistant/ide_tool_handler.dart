@@ -54,6 +54,7 @@ class IdeToolHandler implements AssistantToolHandler {
 
   @override
   Future<Map<String, dynamic>> runPython(String code) async {
+    if (!ideController.isInitialized) await ideController.initialize();
     // Clear and delimit in console so user knows which output is from
     // which tool call
     ideController.clearConsole();
