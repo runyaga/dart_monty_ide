@@ -305,13 +305,18 @@ class MontyIdeController extends ChangeNotifier {
         _extensions ?? const [],
         returnTypeOverrides: hhgReturnTypeOverrides,
       );
+      // Monty.typeCheck prepends prefixCode before the user's script, so
+      // error line numbers are relative to the combined file. Subtract the
+      // prefix line count so reported lines match the user's script.
+      final prefixLines = '\n'.allMatches(prefix).length;
       final errors = await Monty.typeCheck(code, prefixCode: prefix);
       if (errors.isEmpty) {
         _outputController.add('✅ Analysis complete: No errors found.\n');
       } else {
         for (final e in errors) {
+          final userLine = e.line - prefixLines;
           _outputController.add(
-            '❌ [${e.code}] Line ${e.line}, Col ${e.column}: ${e.message}\n',
+            '❌ [${e.code}] Line $userLine, Col ${e.column}: ${e.message}\n',
           );
         }
         _outputController.add('--- Found ${errors.length} typing errors ---\n');

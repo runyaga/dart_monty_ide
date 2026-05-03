@@ -32,6 +32,9 @@ class IdeToolHandler implements AssistantToolHandler {
       ideController.extensions ?? const [],
       returnTypeOverrides: MontyIdeController.hhgReturnTypeOverrides,
     );
+    // Monty.typeCheck prepends prefixCode; subtract prefix line count so
+    // reported lines match the user's script (not the combined file).
+    final prefixLines = '\n'.allMatches(prefix).length;
     final errors = await Monty.typeCheck(code, prefixCode: prefix);
     if (errors.isEmpty) {
       return {'ok': true, 'errors': <Object?>[]};
@@ -42,7 +45,7 @@ class IdeToolHandler implements AssistantToolHandler {
       'errors': errors
           .map(
             (e) => <String, dynamic>{
-              'line': e.line,
+              'line': e.line - prefixLines,
               'col': e.column,
               'code': e.code,
               'message': e.message,
