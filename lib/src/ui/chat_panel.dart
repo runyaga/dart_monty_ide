@@ -138,6 +138,20 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _showSettings = false;
   bool _showDebug = false;
 
+  /// Approximate token count — 1 token ≈ 4 chars (OpenAI heuristic).
+  /// Includes all roles (user, assistant, tool) since they all consume context.
+  String get _approxTokens {
+    final chars = widget.messages.fold<int>(
+      0,
+      (sum, m) => sum + m.content.length,
+    );
+    final tokens = (chars / 4).round();
+    if (tokens >= 1000) {
+      return '~${(tokens / 1000).toStringAsFixed(1)}k tk';
+    }
+    return '~$tokens tk';
+  }
+
   @override
   void dispose() {
     _inputController.dispose();
@@ -172,6 +186,14 @@ class _ChatPanelState extends State<ChatPanel> {
                 const Text(
                   'ASSISTANT',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _approxTokens,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
