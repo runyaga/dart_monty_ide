@@ -93,7 +93,7 @@ void main() async {
       consoleSvg.render(svg);
     }
   });
-  final mapHostApi = FlutterMapHostApi(owmApiKey: kOwmApiKey);
+  final mapHostApi = FlutterMapHostApi();
   final chartHostApi = FlChartHostApiImpl();
 
   // Mutable reference to the current DuckDbExtension instance.

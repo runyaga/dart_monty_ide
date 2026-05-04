@@ -10,10 +10,8 @@ environment:
 dependencies:
   cupertino_icons: ^1.0.8
   dart_duckdb: ^1.4.4
-  dart_monty:
-    path: ../dart_monty
-  dart_monty_core:
-    path: ../dart_monty_core
+  dart_monty: ^0.17.1
+  dart_monty_core: ^0.17.1
   dart_monty_hhg:
     path: ../dart_monty_labs/packages/dart_monty_hhg
   file: ^7.0.0
@@ -54,8 +52,8 @@ dependencies:
   url_launcher: ^6.3.0
 
 dependency_overrides:
-  dart_monty_core:
-    path: ../dart_monty_core
+  dart_monty: ^0.17.1
+  dart_monty_core: ^0.17.1
   dart_monty_hhg:
     path: ../dart_monty_labs/packages/dart_monty_hhg
   isolate_manager: ^6.3.2
