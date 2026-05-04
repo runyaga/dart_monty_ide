@@ -33,6 +33,8 @@ dependencies:
     path: ../dart_monty_labs/packages/hhg_geoengine
   hhg_net:
     path: ../dart_monty_labs/packages/hhg_net
+  hhg_opensky:
+    path: ../dart_monty_labs/packages/hhg_opensky
   hhg_map:
     path: ../dart_monty_labs/packages/hhg_map
   hhg_svg:

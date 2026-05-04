@@ -27,6 +27,7 @@ import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_map/hhg_map.dart';
 import 'package:hhg_map_flutter/hhg_map_flutter.dart';
 import 'package:hhg_net/hhg_net.dart';
+import 'package:hhg_opensky/hhg_opensky.dart';
 import 'package:hhg_svg/hhg_svg.dart';
 import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -135,6 +136,7 @@ void main() async {
     final geoExt = GeoEngineExtension();
     final chartExt = FlChartExtension(hostApi: chartHostApi);
     final netExt = NetExtension();
+    final openSkyExt = OpenSkyExtension();
     final exts = <MontyExtension>[
       flutterExt,
       eventLoopExt,
@@ -147,6 +149,7 @@ void main() async {
       geoExt,
       chartExt,
       netExt,
+      openSkyExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
       basePrompt: defaultAssistantPrompt,
@@ -631,6 +634,10 @@ print(f"Final score: {score} / {asked}")
   await vfs.writeFile(
     'examples/25_load_weather_grid.py',
     _loadWeatherGridScript,
+  );
+  await vfs.writeFile(
+    'examples/26_opensky_flights.py',
+    _openSkyFlightsScript,
   );
 
   final files = await vfs.listFiles();
@@ -2169,5 +2176,46 @@ if result.get("ok"):
     print("weather_grid is now queryable from DuckDB.")
 else:
     print("Fetch failed:", result.get("error", "unknown error"))
+''';
+
+const _openSkyFlightsScript = r'''
+# 26 — Live flights via OpenSky Network
+#
+# Fetches current aircraft positions over a bounding box and plots
+# them as map markers. Click a callsign marker to see the live track.
+#
+# opensky_states(lamin, lamax, lomin, lomax) -> list[dict]
+#   {icao24, callsign, country, lat, lng, altitude, on_ground,
+#    velocity, heading, vertical_rate, squawk}
+#
+# opensky_track(icao24, time=0) -> list[dict]
+#   {time, lat, lng, altitude, heading, on_ground}
+#
+# Anonymous rate limit: 10 requests / 10 s. Back off on 429.
+
+# Bounding box: continental United States
+states = opensky_states(lamin=24, lamax=50, lomin=-125, lomax=-66)
+
+airborne = [s for s in states if s["lat"] is not None and not s["on_ground"]]
+print(f"Received {len(states)} states, {len(airborne)} airborne with position")
+
+map_clear_markers()
+map_clear_polylines()
+
+for s in airborne:
+    label = (s["callsign"] or s["icao24"]).strip()
+    map_add_marker(lat=s["lat"], lng=s["lng"], label=label)
+
+# Pull the track for the first airborne aircraft and draw it
+if airborne:
+    first = airborne[0]
+    print(f"Fetching track for {first['icao24']} ({first['callsign']})")
+    waypoints = opensky_track(icao24=first["icao24"])
+    pts = [[w["lat"], w["lng"]] for w in waypoints if w["lat"] is not None]
+    if pts:
+        map_add_polyline(points=pts)
+        print(f"Track: {len(pts)} waypoints")
+    else:
+        print("No track data available for this aircraft")
 ''';
 
