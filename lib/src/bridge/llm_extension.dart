@@ -48,18 +48,30 @@ class MontyLlmExtension extends MontyExtension {
       handler: (args, ctx) async {
         final prompt = (args['prompt'] as String?) ?? '';
         if (prompt.isEmpty) return '';
-        final stream = service.streamResponse(
-          messages: [
-            <String, dynamic>{'role': 'user', 'content': prompt},
-          ],
-          config: config,
-        );
-        final buf = StringBuffer();
-        await for (final chunk in stream) {
-          if (chunk.text != null) buf.write(chunk.text);
+        try {
+          final stream = service.streamResponse(
+            messages: [
+              <String, dynamic>{'role': 'user', 'content': prompt},
+            ],
+            config: config,
+          );
+          final buf = StringBuffer();
+          await for (final chunk in stream) {
+            if (chunk.text != null) buf.write(chunk.text);
+          }
+          final result = buf.toString();
+          if (result.isEmpty) {
+            throw Exception(
+              'pilot_ask: LLM returned an empty response. '
+              'Check that the model is running and reachable.',
+            );
+          }
+          return result;
+        } on Exception {
+          rethrow;
+        } catch (e) {
+          throw Exception('pilot_ask failed: $e');
         }
-
-        return buf.toString();
       },
     ),
   ];

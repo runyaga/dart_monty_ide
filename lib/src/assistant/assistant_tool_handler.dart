@@ -4,7 +4,12 @@ import 'dart:async';
 /// This allows headless execution (CLI/Tests) without depending on Flutter.
 abstract interface class AssistantToolHandler {
   /// Executes a Python script in a sandbox.
-  Future<Map<String, dynamic>> runPython(String code);
+  ///
+  /// [inputs] are injected as Python variables before [code] runs.
+  Future<Map<String, dynamic>> runPython(
+    String code, {
+    Map<String, Object?>? inputs,
+  });
 
   /// Performs static analysis on Python code.
   Future<Map<String, dynamic>> typeCheck(String code);

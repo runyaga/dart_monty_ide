@@ -21,11 +21,14 @@ class MontyIdeController extends ChangeNotifier {
   MontyIdeController({
     List<MontyExtension>? extensions,
     List<MontyExtension> Function()? extensionsFactory,
+    List<HostFunction> extraFunctions = const [],
   }) : _extensionsFactory = extensionsFactory,
-       _extensions = extensionsFactory?.call() ?? extensions;
+       _extensions = extensionsFactory?.call() ?? extensions,
+       _extraFunctions = extraFunctions;
 
   List<MontyExtension>? _extensions;
   final List<MontyExtension> Function()? _extensionsFactory;
+  final List<HostFunction> _extraFunctions;
   MontyRuntime? _runtime;
   bool _isInitialized = false;
   bool _isExecuting = false;
@@ -76,6 +79,7 @@ class MontyIdeController extends ChangeNotifier {
     // call them through plain `runtime.execute(...)` (rather than via
     // `Hhg.run`) see them as available. Idempotent.
     Hhg.attach(_runtime!);
+    _extraFunctions.forEach(_runtime!.register);
     debugPrint('Monty Runtime Created.');
 
     _isInitialized = true;
@@ -98,6 +102,7 @@ class MontyIdeController extends ChangeNotifier {
     bool clear = true,
     bool silent = false,
     bool strict = false,
+    Map<String, Object?>? inputs,
   }) async {
     if (!_isInitialized) {
       throw StateError(
@@ -155,7 +160,7 @@ class MontyIdeController extends ChangeNotifier {
       // Normalize newlines and ensure trailing newline for the parser.
       final normalizedCode = '${code.replaceAll('\r\n', '\n').trim()}\n';
 
-      final handle = _runtime!.execute(normalizedCode);
+      final handle = _runtime!.execute(normalizedCode, inputs: inputs);
 
       // Wait for the result
       final result = await handle.result;
@@ -366,6 +371,7 @@ class MontyIdeController extends ChangeNotifier {
     _runtime = MontyRuntime(extensions: _extensions);
     // Re-attach HHG extras after interpreter reset.
     Hhg.attach(_runtime!);
+    _extraFunctions.forEach(_runtime!.register);
     lastErrorLine = null;
     clearConsole();
     _outputController.add('--- Interpreter Reset ---\n');
