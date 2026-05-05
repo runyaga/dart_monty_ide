@@ -305,39 +305,43 @@ Have fun.
   );
   await seed(
     'examples/02_gui_counter.py',
-    '# Open the "Monty UI" panel from the toolbar before running.\n'
-        'count = 0\n'
-        '\n'
-        'while True:\n'
-        '    el_emit({\n'
-        '        "type": "column",\n'
-        '        "children": [\n'
-        '            {"type": "text", "value": "Monty UI Counter",'
-        ' "size": 18},\n'
-        '            {"type": "text", "value": f"Count: {count}"},\n'
-        '            {"type": "row", "children": [\n'
-        '                {"type": "button", "id": "inc", "label": "+1"},\n'
-        '                {"type": "button", "id": "dec", "label": "-1"},\n'
-        '                {"type": "button", "id": "reset", "label": "Reset"},\n'
-        '            ]},\n'
-        '            {"type": "slider", "id": "speed", "label": "Set",'
-        ' "min": 0, "max": 100, "value": count},\n'
-        '        ],\n'
-        '    })\n'
-        '    evt = el_recv()\n'
-        '    if evt["type"] == "quit":\n'
-        '        break\n'
-        '    target = evt["target"]\n'
-        '    if target == "inc":\n'
-        '        count = count + 1\n'
-        '    elif target == "dec":\n'
-        '        count = count - 1\n'
-        '    elif target == "reset":\n'
-        '        count = 0\n'
-        '    elif target == "speed":\n'
-        '        count = int(evt["value"])\n'
-        '\n'
-        'print(f"Final count: {count}")\n',
+    r'''
+# Open the "Monty UI" panel from the toolbar before running.
+import asyncio
+
+async def _main():
+    count = 0
+    while True:
+        await el_emit({
+            "type": "column",
+            "children": [
+                {"type": "text", "value": "Monty UI Counter", "size": 18},
+                {"type": "text", "value": f"Count: {count}"},
+                {"type": "row", "children": [
+                    {"type": "button", "id": "inc", "label": "+1"},
+                    {"type": "button", "id": "dec", "label": "-1"},
+                    {"type": "button", "id": "reset", "label": "Reset"},
+                ]},
+                {"type": "slider", "id": "speed", "label": "Set",
+                 "min": 0, "max": 100, "value": count},
+            ],
+        })
+        evt = await el_recv()
+        if evt["type"] == "quit":
+            break
+        target = evt["target"]
+        if target == "inc":
+            count = count + 1
+        elif target == "dec":
+            count = count - 1
+        elif target == "reset":
+            count = 0
+        elif target == "speed":
+            count = int(evt["value"])
+    print(f"Final count: {count}")
+
+asyncio.run(_main())
+''',
   );
   await seed(
     'examples/03_gui_thermostat.py',
@@ -432,6 +436,8 @@ Have fun.
 # REQUIRES OLLAMA: this script calls pilot_ask(...) for narrative.
 # Each click of "Continue" sends the running story to the LLM and
 # appends what comes back. Type a custom action to steer the plot.
+import asyncio
+
 prompt_extend(
     "Text adventure: the script calls pilot_ask() to continue a "
     "branching narrative. Don't drive this with ui_dispatch — let the user play."
@@ -442,60 +448,62 @@ START = (
     "The brass door hums faintly."
 )
 
-story: str = START
-last_action: str = ""
+async def _main():
+    story = START
+    last_action = ""
 
-while True:
-    el_emit({
-        "type": "column",
-        "children": [
-            {"type": "text", "value": "📖 Monty Adventure", "size": 18},
-            {"type": "text", "value": story},
-            {"type": "text_field", "id": "action", "value": last_action,
-             "hint": "What do you do? (or just press Continue)"},
-            {"type": "row", "children": [
-                {"type": "button", "id": "continue", "label": "Continue"},
-                {"type": "button", "id": "restart", "label": "Restart"},
-            ]},
-        ],
-    })
-    evt = el_recv()
-    if evt["type"] == "quit":
-        break
-    target = evt["target"]
-    if target == "action" and evt["type"] == "submit":
-        last_action = evt["value"]
-    elif target == "restart":
-        story = START
-        last_action = ""
-    elif target == "continue":
-        # Show a thinking state while pilot_ask blocks on the LLM.
-        el_emit({
+    while True:
+        await el_emit({
             "type": "column",
             "children": [
                 {"type": "text", "value": "📖 Monty Adventure", "size": 18},
                 {"type": "text", "value": story},
-                {"type": "text", "value": "🤔 The narrator is thinking…", "size": 12},
+                {"type": "text_field", "id": "action", "value": last_action,
+                 "hint": "What do you do? (or just press Continue)"},
+                {"type": "row", "children": [
+                    {"type": "button", "id": "continue", "label": "Continue"},
+                    {"type": "button", "id": "restart", "label": "Restart"},
+                ]},
             ],
         })
-        action_text = last_action if last_action else "the player waits"
-        prompt = (
-            "You are the narrator of a short, atmospheric text adventure. "
-            "Continue the story with ONE short paragraph (2-3 sentences). "
-            "End by hinting at 2-3 possible next actions.\n"
-            f"Story so far: {story}\n"
-            f"Player action: {action_text}"
-        )
-        next_chunk = pilot_ask(prompt)
-        story = story + "\n\n" + next_chunk.strip()
-        last_action = ""
+        evt = await el_recv()
+        if evt["type"] == "quit":
+            break
+        target = evt["target"]
+        if target == "action" and evt["type"] == "submit":
+            last_action = evt["value"]
+        elif target == "restart":
+            story = START
+            last_action = ""
+        elif target == "continue":
+            await el_emit({
+                "type": "column",
+                "children": [
+                    {"type": "text", "value": "📖 Monty Adventure", "size": 18},
+                    {"type": "text", "value": story},
+                    {"type": "text", "value": "🤔 The narrator is thinking…", "size": 12},
+                ],
+            })
+            action_text = last_action if last_action else "the player waits"
+            prompt = (
+                "You are the narrator of a short, atmospheric text adventure. "
+                "Continue the story with ONE short paragraph (2-3 sentences). "
+                "End by hinting at 2-3 possible next actions.\n"
+                f"Story so far: {story}\n"
+                f"Player action: {action_text}"
+            )
+            next_chunk = pilot_ask(prompt)
+            story = story + "\n\n" + next_chunk.strip()
+            last_action = ""
 
-print("THE END")
+    print("THE END")
+
+asyncio.run(_main())
 ''',
   );
   await seed(
     'examples/05_llm_trivia.py',
-    '''
+    r'''
 # REQUIRES OLLAMA: this script generates trivia via pilot_ask(...).
 # Click "New question" — the LLM produces Q + 4 options. Pick one;
 # the script grades it locally and rotates topics to avoid repeats.
@@ -504,98 +512,101 @@ prompt_extend(
     "Score and history are kept in Python state. Topics rotate."
 )
 
+import asyncio
 import json
 
-score: int = 0
-asked: int = 0
-question: str = 'Click "New question" to begin.'
-options: list[str] = ["A", "B", "C", "D"]
-feedback: str = ""
-last_correct: str = ""
-topics: list[str] = [
+TOPICS: list[str] = [
     "1980s movies", "ancient history", "marine biology",
     "world capitals", "classical music", "computer science",
     "mythology", "famous paintings", "space exploration",
     "physics", "Olympic sports", "literature",
 ]
-recent: list[str] = []
 
 
-def fetch_question() -> dict:
-    topic = topics[asked % len(topics)]
-    avoid = "; ".join(recent[-5:]) if recent else "(none)"
-    prompt = (
-        f"Generate ONE trivia question about {topic}. "
-        f"Avoid repeating these recent questions: {avoid}. "
-        'Return ONLY valid JSON with these keys: '
-        '"q" (string, the question), '
-        '"options" (list of 4 distinct short strings, no A/B/C/D labels, in random order), '
-        '"answer" (one of the option strings, exactly matching). '
-        "No markdown, no preamble, just the JSON object."
-    )
-    raw = pilot_ask(prompt)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        return {
-            "q": "(LLM produced invalid JSON; click New question to retry)",
-            "options": ["retry", "retry", "retry", "retry"],
-            "answer": "retry",
-        }
+async def _main():
+    score: int = 0
+    asked: int = 0
+    question: str = 'Click "New question" to begin.'
+    options: list[str] = ["A", "B", "C", "D"]
+    feedback: str = ""
+    last_correct: str = ""
+    recent: list[str] = []
 
+    def fetch_question() -> dict:
+        topic = TOPICS[asked % len(TOPICS)]
+        avoid = "; ".join(recent[-5:]) if recent else "(none)"
+        prompt = (
+            f"Generate ONE trivia question about {topic}. "
+            f"Avoid repeating these recent questions: {avoid}. "
+            'Return ONLY valid JSON with these keys: '
+            '"q" (string, the question), '
+            '"options" (list of 4 distinct short strings, no A/B/C/D labels, in random order), '
+            '"answer" (one of the option strings, exactly matching). '
+            "No markdown, no preamble, just the JSON object."
+        )
+        raw = pilot_ask(prompt)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {
+                "q": "(LLM produced invalid JSON; click New question to retry)",
+                "options": ["retry", "retry", "retry", "retry"],
+                "answer": "retry",
+            }
 
-while True:
-    score_label = f"Score: {score} / {asked}"
-    el_emit({
-        "type": "column",
-        "children": [
-            {"type": "text", "value": "🧠 Monty Trivia", "size": 18},
-            {"type": "text", "value": score_label, "size": 12},
-            {"type": "text", "value": question, "size": 14},
-            {"type": "row", "children": [
-                {"type": "button", "id": "opt0", "label": options[0]},
-                {"type": "button", "id": "opt1", "label": options[1]},
-            ]},
-            {"type": "row", "children": [
-                {"type": "button", "id": "opt2", "label": options[2]},
-                {"type": "button", "id": "opt3", "label": options[3]},
-            ]},
-            {"type": "text", "value": feedback, "size": 12},
-            {"type": "button", "id": "next", "label": "New question"},
-        ],
-    })
-    evt = el_recv()
-    if evt["type"] == "quit":
-        break
-    target = evt["target"]
-    if target == "next":
-        # Emit a thinking-state view before the (blocking) LLM call,
-        # otherwise the panel looks frozen while we wait for Ollama.
-        el_emit({
+    while True:
+        score_label = f"Score: {score} / {asked}"
+        await el_emit({
             "type": "column",
             "children": [
                 {"type": "text", "value": "🧠 Monty Trivia", "size": 18},
-                {"type": "text", "value": f"Score: {score} / {asked}", "size": 12},
-                {"type": "text", "value": "🤔 Thinking…", "size": 14},
+                {"type": "text", "value": score_label, "size": 12},
+                {"type": "text", "value": question, "size": 14},
+                {"type": "row", "children": [
+                    {"type": "button", "id": "opt0", "label": options[0]},
+                    {"type": "button", "id": "opt1", "label": options[1]},
+                ]},
+                {"type": "row", "children": [
+                    {"type": "button", "id": "opt2", "label": options[2]},
+                    {"type": "button", "id": "opt3", "label": options[3]},
+                ]},
+                {"type": "text", "value": feedback, "size": 12},
+                {"type": "button", "id": "next", "label": "New question"},
             ],
         })
-        q = fetch_question()
-        question = q["q"]
-        options = q["options"]
-        last_correct = q["answer"]
-        recent.append(question)
-        feedback = ""
-    elif target.startswith("opt"):
-        idx = int(target[3:])
-        picked = options[idx]
-        asked = asked + 1
-        if picked == last_correct:
-            score = score + 1
-            feedback = "✅ Correct!"
-        else:
-            feedback = "❌ Wrong. Answer: " + last_correct
+        evt = await el_recv()
+        if evt["type"] == "quit":
+            break
+        target = evt["target"]
+        if target == "next":
+            await el_emit({
+                "type": "column",
+                "children": [
+                    {"type": "text", "value": "🧠 Monty Trivia", "size": 18},
+                    {"type": "text", "value": f"Score: {score} / {asked}", "size": 12},
+                    {"type": "text", "value": "🤔 Thinking…", "size": 14},
+                ],
+            })
+            q = fetch_question()
+            question = q["q"]
+            options = q["options"]
+            last_correct = q["answer"]
+            recent.append(question)
+            feedback = ""
+        elif target.startswith("opt"):
+            idx = int(target[3:])
+            picked = options[idx]
+            asked = asked + 1
+            if picked == last_correct:
+                score = score + 1
+                feedback = "✅ Correct!"
+            else:
+                feedback = "❌ Wrong. Answer: " + last_correct
 
-print(f"Final score: {score} / {asked}")
+    print(f"Final score: {score} / {asked}")
+
+
+asyncio.run(_main())
 ''',
   );
   // HHG examples are canonical demos — always overwrite so updates
@@ -1395,6 +1406,8 @@ prompt_extend(
 )
 requires(["duck_execute", "duck_query_records"])
 
+import asyncio
+
 # Seed a couple of sample tables so there's something to inspect on
 # a fresh run. If tables already exist (e.g. from running the
 # aviation example first) these CREATE OR REPLACEs reset them.
@@ -1422,6 +1435,7 @@ INSERT INTO flights VALUES
     ('B6',     'KJFK→KBOS',  41780)
 """)
 
+
 def list_tables():
     rows = duck_query_records(
         "SELECT table_name FROM information_schema.tables "
@@ -1429,11 +1443,13 @@ def list_tables():
     )
     return [r["table_name"] for r in rows]
 
+
 def schema_text(table):
     info = duck_query_records(f"PRAGMA table_info('{table}')")
     if not info:
         return "(no columns)"
     return "\n".join(f"  • {r['name']} : {r['type']}" for r in info)
+
 
 def preview_text(table, n=10):
     rows = duck_query_records(f'SELECT * FROM "{table}" LIMIT {n}')
@@ -1445,70 +1461,76 @@ def preview_text(table, n=10):
         out = out + "\n  " + " | ".join(str(r[h]) for h in headers)
     return out
 
+
 def row_count(table):
     return duck_query_records(f'SELECT count(*) AS n FROM "{table}"')[0]["n"]
 
-selected = None  # currently drilled-into table name
 
-while True:
-    if selected is None:
-        # ------- Table list view --------------------------------
-        tables = list_tables()
-        children = [
-            {"type": "text", "value": "🦆 DuckDB Inspector", "size": 18},
-            {"type": "text",
-             "value": f"{len(tables)} table(s) in main schema. "
-                      f"Click one to drill in."},
-        ]
-        for t in tables:
-            children.append(
-                {"type": "button", "id": f"tbl:{t}", "label": f"📋 {t}"}
-            )
-        children.append({"type": "row", "children": [
-            {"type": "button", "id": "refresh", "label": "🔄 Refresh"},
-            {"type": "button", "id": "quit", "label": "Quit"},
-        ]})
-        el_emit({"type": "column", "children": children})
-    else:
-        # ------- Table detail view ------------------------------
-        try:
-            schema = schema_text(selected)
-            preview = preview_text(selected)
-            count = row_count(selected)
-        except Exception as e:
-            schema = ""
-            preview = f"(error: {e})"
-            count = 0
-        el_emit({
-            "type": "column",
-            "children": [
-                {"type": "row", "children": [
-                    {"type": "button", "id": "back",
-                     "label": "← Back to tables"},
-                    {"type": "button", "id": "quit", "label": "Quit"},
-                ]},
+async def _main():
+    selected = None  # currently drilled-into table name
+
+    while True:
+        if selected is None:
+            # ------- Table list view --------------------------------
+            tables = list_tables()
+            children = [
+                {"type": "text", "value": "🦆 DuckDB Inspector", "size": 18},
                 {"type": "text",
-                 "value": f"📋 {selected}  ({count} row(s))",
-                 "size": 18},
-                {"type": "text", "value": "Schema:"},
-                {"type": "text", "value": schema},
-                {"type": "text", "value": "Preview (first 10):"},
-                {"type": "text", "value": preview},
-            ],
-        })
+                 "value": f"{len(tables)} table(s) in main schema. "
+                          f"Click one to drill in."},
+            ]
+            for t in tables:
+                children.append(
+                    {"type": "button", "id": f"tbl:{t}", "label": f"📋 {t}"}
+                )
+            children.append({"type": "row", "children": [
+                {"type": "button", "id": "refresh", "label": "🔄 Refresh"},
+                {"type": "button", "id": "quit", "label": "Quit"},
+            ]})
+            await el_emit({"type": "column", "children": children})
+        else:
+            # ------- Table detail view ------------------------------
+            try:
+                schema = schema_text(selected)
+                preview = preview_text(selected)
+                count = row_count(selected)
+            except Exception as e:
+                schema = ""
+                preview = f"(error: {e})"
+                count = 0
+            await el_emit({
+                "type": "column",
+                "children": [
+                    {"type": "row", "children": [
+                        {"type": "button", "id": "back",
+                         "label": "← Back to tables"},
+                        {"type": "button", "id": "quit", "label": "Quit"},
+                    ]},
+                    {"type": "text",
+                     "value": f"📋 {selected}  ({count} row(s))",
+                     "size": 18},
+                    {"type": "text", "value": "Schema:"},
+                    {"type": "text", "value": schema},
+                    {"type": "text", "value": "Preview (first 10):"},
+                    {"type": "text", "value": preview},
+                ],
+            })
 
-    evt = el_recv()
-    if evt["type"] == "quit" or evt["target"] == "quit":
-        break
-    target = evt["target"]
-    if target == "back":
-        selected = None
-    elif target == "refresh":
-        pass  # loop re-renders the table list
-    elif target.startswith("tbl:"):
-        selected = target[4:]
+        evt = await el_recv()
+        if evt["type"] == "quit" or evt["target"] == "quit":
+            break
+        target = evt["target"]
+        if target == "back":
+            selected = None
+        elif target == "refresh":
+            pass  # loop re-renders the table list
+        elif target.startswith("tbl:"):
+            selected = target[4:]
 
-print("DuckDB inspector closed.")
+    print("DuckDB inspector closed.")
+
+
+asyncio.run(_main())
 ''';
 
 const _remoteWeatherScript = r'''
@@ -2084,6 +2106,8 @@ const _cityExplorerScript = r'''
 requires(["map_fly_to", "map_add_marker", "map_fit_bounds_to_markers",
           "map_recv", "el_emit", "net_http_get_json"])
 
+import asyncio
+
 CITIES = [
     {"name": "New York",     "state": "NY", "lat": 40.7128, "lng": -74.0060,  "pop": "8.3M", "note": "The Big Apple"},
     {"name": "Los Angeles",  "state": "CA", "lat": 34.0522, "lng": -118.2437, "pop": "3.9M", "note": "City of Angels"},
@@ -2097,6 +2121,7 @@ CITIES = [
     {"name": "Denver",       "state": "CO", "lat": 39.7392, "lng": -104.9903, "pop": "0.7M", "note": "Mile High City"},
 ]
 
+
 def weather_desc(code):
     if code is None: return "—"
     if code == 0:    return "Clear sky"
@@ -2106,6 +2131,7 @@ def weather_desc(code):
     if code <= 77:   return "Snowy"
     if code <= 82:   return "Showers"
     return "Stormy"
+
 
 def fetch_weather(lat, lng):
     url = (
@@ -2120,8 +2146,9 @@ def fetch_weather(lat, lng):
     except Exception:
         return None, None, None
 
-def show_idle():
-    el_emit({
+
+async def show_idle():
+    await el_emit({
         "type": "column",
         "children": [
             {"type": "text", "value": "City Explorer", "size": 18},
@@ -2129,11 +2156,12 @@ def show_idle():
         ],
     })
 
-def show_detail(city):
+
+async def show_detail(city):
     temp, wind, code = fetch_weather(city["lat"], city["lng"])
     temp_str = f"{temp:.1f} °C" if temp is not None else "—"
     wind_str = f"{wind:.0f} mph" if wind is not None else "—"
-    el_emit({
+    await el_emit({
         "type": "column",
         "children": [
             {"type": "text", "value": f"{city['name']}, {city['state']}", "size": 20},
@@ -2145,6 +2173,7 @@ def show_detail(city):
         ],
     })
     print(f"Tapped {city['name']}: {temp_str}, {wind_str}, {weather_desc(code)}")
+
 
 # --- drop all markers ---
 marker_map = {}
@@ -2159,23 +2188,29 @@ for c in CITIES:
     marker_map[mid] = c
 
 map_fit_bounds_to_markers(60)
-show_idle()
 print("Tap any city marker. Script runs for 5 minutes.")
 
-# --- event loop ---
-while True:
-    evt = map_recv(timeout_ms=300000)
-    if evt is None:
-        print("Timed out — re-run to continue.")
-        break
-    t = evt["type"]
-    if t == "marker_tapped":
-        city = marker_map.get(evt["marker_id"])
-        if city:
-            map_fly_to(city["lat"], city["lng"], zoom=10, animated=True)
-            show_detail(city)
-    elif t == "map_tapped":
-        show_idle()
+
+async def _main():
+    await show_idle()
+
+    # --- event loop ---
+    while True:
+        evt = await map_recv(timeout_ms=300000)
+        if evt is None:
+            print("Timed out — re-run to continue.")
+            break
+        t = evt["type"]
+        if t == "marker_tapped":
+            city = marker_map.get(evt["marker_id"])
+            if city:
+                map_fly_to(city["lat"], city["lng"], zoom=10, animated=True)
+                await show_detail(city)
+        elif t == "map_tapped":
+            await show_idle()
+
+
+asyncio.run(_main())
 ''';
 
 const _loadWeatherGridScript = '''
