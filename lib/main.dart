@@ -160,7 +160,12 @@ void main() async {
     return exts;
   }
 
-  controller = MontyIdeController(extensionsFactory: extensionsFactory);
+  controller = MontyIdeController(
+    extensionsFactory: extensionsFactory,
+    extraFunctions: [
+      buildRunScriptFunction((path) => vfs.readFile(path)),
+    ],
+  );
 
   // Seed sample files only if missing — never overwrite user edits.
   final existing = (await vfs.listFiles()).toSet();

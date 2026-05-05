@@ -55,12 +55,18 @@ class AssistantController {
   /// Provide either [systemPrompt] (static) or [systemPromptBuilder]
   /// (rebuilt per turn — useful when extensions register prompt fragments
   /// at runtime). If both are provided, [systemPromptBuilder] wins.
+  ///
+  /// [maxHistoryMessages] caps how many messages are retained across turns.
+  /// When the history exceeds this limit it is trimmed from the front,
+  /// always snapping to a user-message boundary so tool call/result pairs
+  /// are never split. Defaults to 40 (≈ 10 full exchanges).
   AssistantController({
     required this.toolHandler,
     required this.llmService,
     required this.config,
     String? systemPrompt,
     String Function()? systemPromptBuilder,
+    this.maxHistoryMessages = 40,
   }) : assert(
          systemPrompt != null || systemPromptBuilder != null,
          'Provide systemPrompt or systemPromptBuilder',
@@ -76,6 +82,9 @@ class AssistantController {
 
   /// The LLM configuration.
   final LlmConfig config;
+
+  /// Maximum number of messages kept in history before trimming.
+  final int maxHistoryMessages;
 
   final String? _staticSystemPrompt;
   final String Function()? _systemPromptBuilder;
@@ -119,6 +128,23 @@ class AssistantController {
     _log('--- HISTORY CLEARED ---');
   }
 
+  /// Trims [_history] to at most [maxHistoryMessages] entries by removing
+  /// the oldest messages. Always snaps the cut point forward to the next
+  /// user-role message so tool call / result pairs are never orphaned.
+  void _trimHistory() {
+    if (_history.length <= maxHistoryMessages) return;
+    var cutFrom = _history.length - maxHistoryMessages;
+    // Snap to the next user message so we don't start mid-exchange.
+    while (cutFrom < _history.length &&
+        _history[cutFrom]['role'] != 'user') {
+      cutFrom++;
+    }
+    if (cutFrom > 0 && cutFrom < _history.length) {
+      _history.removeRange(0, cutFrom);
+      _log('--- HISTORY TRIMMED to ${_history.length} messages ---');
+    }
+  }
+
   /// Stops the current processing loop.
   void stop() {
     _isStopped = true;
@@ -133,6 +159,7 @@ class AssistantController {
     _isStopped = false;
     final content = context != null ? '$context\n\n$prompt' : prompt;
     _history.add({'role': 'user', 'content': content});
+    _trimHistory();
     _turnCount = 0;
     _log('--- NEW SESSION: $prompt ---');
     try {
@@ -268,8 +295,10 @@ class AssistantController {
         return await toolHandler.typeCheck(code);
       } else if (call.name == 'run_python') {
         final code = (call.arguments['code'] as String?) ?? '';
+        final rawInputs = call.arguments['inputs'] as Map<String, dynamic>?;
+        final inputs = rawInputs?.map((k, v) => MapEntry(k, v as Object?));
 
-        return await toolHandler.runPython(code);
+        return await toolHandler.runPython(code, inputs: inputs);
       } else if (call.name == 'write_file') {
         final path = (call.arguments['path'] as String?) ?? 'file.py';
         final content = (call.arguments['content'] as String?) ?? '';
@@ -324,6 +353,12 @@ class AssistantController {
         'type': 'object',
         'properties': {
           'code': {'type': 'string'},
+          'inputs': {
+            'type': 'object',
+            'description':
+                'Optional key/value pairs injected as Python variables before code runs.',
+            'additionalProperties': true,
+          },
         },
         'required': ['code'],
       },

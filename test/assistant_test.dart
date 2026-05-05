@@ -29,7 +29,10 @@ class MockLlmService implements LlmService {
 
 class MockToolHandler implements AssistantToolHandler {
   @override
-  Future<Map<String, dynamic>> runPython(String code) async => {'output': '42'};
+  Future<Map<String, dynamic>> runPython(
+    String code, {
+    Map<String, Object?>? inputs,
+  }) async => {'output': '42'};
 
   @override
   Future<Map<String, dynamic>> typeCheck(String code) async => {'ok': true};
