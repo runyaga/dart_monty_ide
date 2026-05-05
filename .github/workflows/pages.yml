@@ -35,6 +35,12 @@ jobs:
           repository: runyaga/dart_monty_core
           path: dart_monty_core
 
+      - name: Checkout dart_monty_labs (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: runyaga/dart_monty_labs
+          path: dart_monty_labs
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
