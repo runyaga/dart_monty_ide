@@ -16,6 +16,7 @@ import 'package:dart_monty_ide/src/llm/ollama_service.dart';
 import 'package:dart_monty_ide/src/vfs/local_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/memory_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
+import 'package:dart_monty_ide/secrets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_dataframe/hhg_dataframe.dart';
@@ -26,6 +27,7 @@ import 'package:hhg_geoengine/hhg_geoengine.dart';
 import 'package:hhg_map/hhg_map.dart';
 import 'package:hhg_map_flutter/hhg_map_flutter.dart';
 import 'package:hhg_net/hhg_net.dart';
+import 'package:hhg_opensky/hhg_opensky.dart';
 import 'package:hhg_svg/hhg_svg.dart';
 import 'package:hhg_svg_flutter/hhg_svg_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -134,6 +136,7 @@ void main() async {
     final geoExt = GeoEngineExtension();
     final chartExt = FlChartExtension(hostApi: chartHostApi);
     final netExt = NetExtension();
+    final openSkyExt = OpenSkyExtension();
     final exts = <MontyExtension>[
       flutterExt,
       eventLoopExt,
@@ -146,6 +149,7 @@ void main() async {
       geoExt,
       chartExt,
       netExt,
+      openSkyExt,
     ];
     promptExt.snapshotBuilder = () => buildSystemPrompt(
       basePrompt: defaultAssistantPrompt,
@@ -610,27 +614,52 @@ print(f"Final score: {score} / {asked}")
   await vfs.writeFile('examples/14_hhg_map_basics.py', _hhgMapBasicsScript);
   await vfs.writeFile('examples/15_hhg_map_aviation.py', _hhgMapAviationScript);
   await vfs.writeFile(
-    'examples/16_hhg_duckdb_inspector.py',
+    'examples/16_opensky_flights.py',
+    _openSkyFlightsScript,
+  );
+  await vfs.writeFile(
+    'examples/17_hhg_duckdb_inspector.py',
     _hhgDuckdbInspectorScript,
   );
-  await vfs.writeFile('examples/17_hhg_charts.py', _hhgChartsScript);
-  await vfs.writeFile('examples/18_remote_weather.py', _remoteWeatherScript);
+  await vfs.writeFile('examples/18_hhg_charts.py', _hhgChartsScript);
+  await vfs.writeFile('examples/19_remote_weather.py', _remoteWeatherScript);
   await vfs.writeFile(
-    'examples/19_remote_earthquakes.py',
+    'examples/20_remote_earthquakes.py',
     _remoteEarthquakesScript,
   );
-  await vfs.writeFile('examples/20_load_weather.py', _loadWeatherScript);
-  await vfs.writeFile('examples/21_load_airports.py', _loadAirportsScript);
-  await vfs.writeFile('examples/22_report_weather.py', _reportWeatherScript);
+  await vfs.writeFile('examples/21_load_weather.py', _loadWeatherScript);
+  await vfs.writeFile('examples/22_load_airports.py', _loadAirportsScript);
+  await vfs.writeFile('examples/23_report_weather.py', _reportWeatherScript);
   await vfs.writeFile(
-    'examples/23_report_airports.py',
+    'examples/24_report_airports.py',
     _reportAirportsScript,
   );
-  await vfs.writeFile('examples/24_city_explorer.py', _cityExplorerScript);
+  await vfs.writeFile('examples/25_city_explorer.py', _cityExplorerScript);
   await vfs.writeFile(
-    'examples/25_load_weather_grid.py',
+    'examples/26_load_weather_grid.py',
     _loadWeatherGridScript,
   );
+
+  // Clean up stale files from previous numbering schemes.
+  {
+    final staleCheck = await vfs.listFiles();
+    for (final stale in const [
+      // Stale files from renumbering 16–25 → 17–26 to insert opensky at 16.
+      'examples/26_opensky_flights.py',
+      'examples/16_hhg_duckdb_inspector.py',
+      'examples/17_hhg_charts.py',
+      'examples/18_remote_weather.py',
+      'examples/19_remote_earthquakes.py',
+      'examples/20_load_weather.py',
+      'examples/21_load_airports.py',
+      'examples/22_report_weather.py',
+      'examples/23_report_airports.py',
+      'examples/24_city_explorer.py',
+      'examples/25_load_weather_grid.py',
+    ]) {
+      if (staleCheck.contains(stale)) await vfs.deleteFile(stale);
+    }
+  }
 
   final files = await vfs.listFiles();
   var shouldUpdate = !files.contains('system_prompt.txt');
@@ -2168,5 +2197,165 @@ if result.get("ok"):
     print("weather_grid is now queryable from DuckDB.")
 else:
     print("Fetch failed:", result.get("error", "unknown error"))
+''';
+
+const _openSkyFlightsScript = r'''
+# 16 — Live flights via OpenSky Network
+#
+# Fetches current aircraft positions over a bounding box and plots
+# them as map markers. Click a callsign marker to see details.
+# Use the "Add flight" button to show more, or "Remove" to hide one.
+#
+# opensky_states(lamin, lamax, lomin, lomax) -> list[dict]
+#   {icao24, callsign, country, lat, lng, altitude, on_ground,
+#    velocity, heading, vertical_rate, squawk}
+#
+# opensky_track(icao24, time=0) -> list[dict]
+#   {time, lat, lng, altitude, heading, on_ground}
+#
+# Anonymous rate limit: 10 requests / 10 s. Back off on 429.
+
+states = opensky_states(lamin=24, lamax=50, lomin=-125, lomax=-66)
+
+import re, asyncio, math
+_airline = re.compile(r'^[A-Z]{3}\d+')
+
+valid = [
+    s for s in states
+    if s["lat"] is not None
+    and s["lng"] is not None
+    and not s["on_ground"]
+    and s["callsign"]
+    and _airline.match(s["callsign"].strip())
+    and s["heading"] is not None
+    and s["velocity"] is not None
+    and s["velocity"] > 100
+    and s["altitude"] is not None
+    and s["altitude"] > 3000
+]
+print(f"Received {len(states)} states, {len(valid)} fully-valid airborne")
+
+if not valid:
+    print("No valid aircraft in this snapshot — try again in a moment.")
+else:
+    map_clear_markers()
+    aircraft = {}   # marker_id -> state dict
+    shown = 0
+
+    def _add_next():
+        nonlocal shown
+        for s in valid[shown:]:
+            shown += 1
+            cs = s["callsign"].strip()
+            if any(v["callsign"].strip() == cs for v in aircraft.values()):
+                continue
+            mid = map_add_marker(lat=s["lat"], lng=s["lng"], label=cs)
+            aircraft[mid] = s
+            print(f"Added {cs}")
+            return True
+        print("No more flights available in this snapshot.")
+        return False
+
+    for _ in range(5):
+        if not _add_next():
+            break
+
+    print(f"Showing {len(aircraft)} aircraft. Click a marker for details.")
+
+    _active_polylines = []
+
+    def _fmt_coord(lat, lng):
+        ns = "N" if lat >= 0 else "S"
+        ew = "E" if lng >= 0 else "W"
+        return f"{abs(lat):.1f}°{ns} {abs(lng):.1f}°{ew}"
+
+    def _show_info(mid):
+        s = aircraft[mid]
+        map_pulse_marker(mid, True)
+
+        for pid in _active_polylines:
+            map_remove_polyline(pid)
+        _active_polylines.clear()
+
+        hdg_rad = math.radians(s["heading"])
+        dist = 6.0
+        dlat = dist * math.cos(hdg_rad)
+        dlng = dist * math.sin(hdg_rad) / math.cos(math.radians(s["lat"]))
+        dest = [s["lat"] + dlat, s["lng"] + dlng]
+        pid = map_add_polyline(
+            points=[[s["lat"], s["lng"]], dest], color="orange"
+        )
+        _active_polylines.append(pid)
+
+        alt_ft = int(s["altitude"] * 3.28084)
+        spd_kts = int(s["velocity"] * 1.94384)
+        info_lines = [
+            f"ICAO: {s['icao24']}  ·  {s['country']}",
+            f"Alt {s['altitude']:.0f} m ({alt_ft:,} ft)"
+            f"  ·  {spd_kts} kts  ·  hdg {s['heading']:.0f}°",
+            f"Heading toward: {_fmt_coord(dest[0], dest[1])}",
+        ]
+
+        try:
+            waypoints = opensky_track(icao24=s["icao24"])
+            pts = [
+                [w["lat"], w["lng"]]
+                for w in waypoints if w["lat"] is not None
+            ]
+            if len(pts) >= 2:
+                pid = map_add_polyline(
+                    points=[pts[0], [s["lat"], s["lng"]]], color="blue"
+                )
+                _active_polylines.append(pid)
+                info_lines.append(
+                    f"Track origin: {_fmt_coord(pts[0][0], pts[0][1])}"
+                )
+            else:
+                info_lines.append("Track origin: unavailable")
+        except Exception as e:
+            info_lines.append(f"Track: {e}")
+
+        map_set_popup(
+            title=f"✈ {s['callsign'].strip()}",
+            lines=info_lines,
+            marker_id=mid,
+        )
+
+    async def _wait_for_event():
+        while True:
+            evt = await map_recv(timeout_ms=120000)
+            if evt is None:
+                return None
+            t = evt.get("type")
+            if t == "marker_tapped" and evt.get("marker_id") in aircraft:
+                return evt
+            if t == "action_tapped":
+                return evt
+
+    while True:
+        event = asyncio.run(_wait_for_event())
+        if not event:
+            print("Timed out.")
+            map_clear_popup()
+            break
+
+        t = event.get("type")
+
+        if t == "action_tapped":
+            action = event.get("action")
+            if action == "add_flight":
+                _add_next()
+            elif action == "remove_flight":
+                mid = event.get("marker_id")
+                if mid and mid in aircraft:
+                    del aircraft[mid]
+                    map_remove_marker(mid)
+                    map_clear_popup()
+                    for pid in _active_polylines:
+                        map_remove_polyline(pid)
+                    _active_polylines.clear()
+            continue
+
+        _show_info(event["marker_id"])
 ''';
 
