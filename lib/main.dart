@@ -16,7 +16,6 @@ import 'package:dart_monty_ide/src/llm/ollama_service.dart';
 import 'package:dart_monty_ide/src/vfs/local_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/memory_vfs.dart';
 import 'package:dart_monty_ide/src/vfs/monty_vfs.dart';
-import 'package:dart_monty_ide/secrets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hhg_dataframe/hhg_dataframe.dart';
@@ -94,7 +93,10 @@ void main() async {
       consoleSvg.render(svg);
     }
   });
-  final mapHostApi = FlutterMapHostApi();
+  const _owmKey = String.fromEnvironment('OWM_API_KEY');
+  final mapHostApi = FlutterMapHostApi(
+    owmApiKey: _owmKey.isEmpty ? null : _owmKey,
+  );
   final chartHostApi = FlChartHostApiImpl();
 
   // Mutable reference to the current DuckDbExtension instance.
