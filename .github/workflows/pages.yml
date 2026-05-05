@@ -40,6 +40,7 @@ jobs:
         with:
           repository: runyaga/dart_monty_labs
           path: dart_monty_labs
+          token: ${{ secrets.LABS_READ_TOKEN }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
